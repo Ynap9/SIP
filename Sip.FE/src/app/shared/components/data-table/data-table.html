@@ -1,0 +1,99 @@
+<p-table #dt1 [value]="data() || []" dataKey="id" [rows]="pageSize()" [loading]="loading()" [rowHover]="true"
+    [showGridlines]="true" [paginator]="false" responsiveLayout="scroll"
+    [resizableColumns]="true" columnResizeMode="expand"
+    (onColResize)="onColResize($event)">
+    <ng-template #header>
+        <tr>
+            @for (col of (columns()); track $index) {
+            <th [style]="col.headerContainerStyle" [pSortableColumn]="col.cellViewType === cellViewTypes.CHECKBOX ? undefined : col.field" pResizableColumn>
+                <div class="flex justify-center cols-center">
+                    @if (col.cellViewType === cellViewTypes.CHECKBOX) {
+                    <input type="checkbox" [checked]="isAllChecked(col.field || '')" (click)="$event.stopPropagation()" (change)="onHeaderCheckboxClick(col)" />
+                    } @else {
+                    {{ col.header }}
+                    @if (col.field) {
+                    <p-sortIcon [field]="col.field"></p-sortIcon>
+                    }
+                    }
+                </div>
+            </th>
+            }
+        </tr>
+    </ng-template>
+    <ng-template #body let-row let-rowIndex="rowIndex">
+        <tr>
+            @for (col of (columns()); track $index) {
+            <td [style]="col.cellStyle" [ngClass]="col.cellClass" (click)="onCellClick(col, row)">
+                @if (col.cellViewType === cellViewTypes.CUSTOM_COMP) {
+                <div class="flex items-center justify-center w-full">
+                    <ng-container
+                        *ngComponentOutlet="col.customComponent; injector: customInjector ; inputs: {row, rowIndex, data: get(row, col.field || '') }"></ng-container>
+                </div>
+                } @else if (col.cellViewType === cellViewTypes.INDEX) {
+                <span>{{ getIndexValue(rowIndex) }}</span>
+                } @else if (col.cellRender) {
+                <div [innerHTML]="sanitizer.bypassSecurityTrustHtml(row[col.field || ''])"></div>
+                } @else if (col.cellViewType === cellViewTypes.DATE) {
+                {{ get(row, col.field || '') | date: (col.dateFormat || 'dd/MM/yyyy') }}
+                } @else if (col.cellViewType === cellViewTypes.CURRENCY) {
+                {{ formatVND(get(row, col.field || '')) }}
+                }
+                @else if (col.cellViewType === cellViewTypes.CHECKBOX) {
+                <input type="checkbox" [checked]="get(row, col.field || '')" (click)="$event.stopPropagation()" (change)="onCellClick(col, row)" />
+                }
+                @else if (col.cellViewType === cellViewTypes.LINK_BLANK) {
+                    <a [href]="get(row, col.field || '')" target="_blank" class="!underline cursor-pointer text-blue-600">{{get(row, col.field || '')}}</a>
+                }
+                @else if (col.cellViewType === cellViewTypes.STATUS && col.statusSeverityFunction) {
+                    <div class="flex justify-center">
+                        <p-tag [value]="get(row, col.field || '')" [severity]="col.statusSeverityFunction(row)"></p-tag>
+                    </div>
+                }
+                @else if (col.cellViewType === cellViewTypes.SECRET) {
+                    <div class="flex items-center justify-center gap-2">
+                        <span>{{ isSecretVisible(rowIndex, col.field) ? get(row, col.field || '') : '****' }}</span>
+                            <button type="button" 
+                                (click)="toggleSecret(rowIndex, col.field); $event.stopPropagation()" 
+                                class="p-1 cursor-pointer">
+                                <i [class]="isSecretVisible(rowIndex, col.field) ? 'pi pi-eye' : 'pi pi-eye-slash'"></i>
+                            </button>
+                    </div>
+                }
+                @else if (col.cellViewType === cellViewTypes.BOOL_CHECK) {
+                    <div class="flex justify-center">
+                        <span class="inline-flex items-center justify-center w-5 h-5 border-2 rounded"
+                        [ngClass]="get(row, col.field || '') ? 'border-green-500 bg-green-500 text-white' : 'border-gray-400 bg-white'">
+                    @if (get(row, col.field || '')) {
+                        <i class="pi pi-check" style="font-size: 0.75rem"></i>
+                    }
+                    </span>
+                </div>
+                }
+                @else if ('field' in col) {
+                    <span [class.cursor-pointer]="isCellClickable(col)" (click)="onCellClick(col, row)">{{ get(row, col.field || '') }}</span>
+                }
+            </td>
+            }
+        </tr>
+    </ng-template>
+    <ng-template #emptymessage>
+        <tr>    
+            <td [attr.colspan]="columns().length">Không có dữ liệu</td>
+        </tr>
+    </ng-template>
+    <ng-template #loadingbody>
+        <tr>
+            <td [attr.colspan]="columns().length">Đang tải dữ liệu...</td>
+        </tr>
+    </ng-template>
+</p-table>
+@if (!hidePaginator()) {
+<div class="w-full flex flex-row justify-center items-center gap-4">
+    <div class="flex items-center gap-2">
+        <label>Đi đến trang:</label>
+        <input type="number" #pageInput min="1" class="border rounded px-2 py-1 w-20" (keyup.enter)="goToPageNumber(+pageInput.value)" />
+        <button class="px-3 py-1 bg-blue-500 text-white rounded" (click)="goToPageNumber(+pageInput.value)">Đi</button>
+    </div>
+    <p-paginator #paginator (onPageChange)="onPage($event)" [rows]="pageSize()" [totalRecords]="total()" />
+</div>
+}

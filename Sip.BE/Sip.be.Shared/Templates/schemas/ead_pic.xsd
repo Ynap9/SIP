@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           elementFormDefault="qualified"
+           attributeFormDefault="unqualified">
+
+    <xs:complexType name="elementContainer">
+        <xs:all>
+            <xs:element type="xs:string" name="arcDocCode"/>
+            <xs:element type="xs:string" name="maintenance"/>
+            <xs:element type="xs:string" name="typePic"/>
+            <xs:element type="xs:string" name="archivesNumber"/>
+            <xs:element type="xs:string" name="inforSign"/>
+            <xs:element type="xs:string" name="eventName"/>
+            <xs:element type="xs:string" name="imageTitle"/>
+            <xs:element type="xs:string" name="photographer"/>
+            <xs:element type="xs:string" name="photoPlace"/>
+            <xs:element type="xs:string" name="photoTime"/>
+            <xs:element type="xs:string" name="colour"/>
+            <xs:element type="xs:string" name="filmSize"/>
+            <xs:element type="xs:string" name="docAttached"/>
+            <xs:element type="xs:string" name="mode"/>
+            <xs:element type="xs:string" name="format"/>
+            <xs:element type="xs:string" name="riskRecovery"/>
+            <xs:element type="xs:string" name="riskRecoveryStatus"/>
+            <xs:element type="xs:string" name="description"/>
+        </xs:all>
+    </xs:complexType>
+
+    <xs:element name="simpledc" type="elementContainer"/>
+
+</xs:schema>

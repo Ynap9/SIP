@@ -1,0 +1,26 @@
+<div class="flex flex-col gap-4">
+  <app-breadcrumb [home]="home" [items]="breadcrumbItems" />
+
+  <!-- Chọn chế độ kiểm tra -->
+  <div class="flex items-center gap-2">
+    <label class="font-medium">Chế độ:</label>
+    <p-selectbutton
+      [options]="modeOptions"
+      [ngModel]="mode()"
+      optionLabel="label"
+      optionValue="value"
+      [allowEmpty]="false"
+      (onChange)="onModeChange($event.value)"
+    />
+  </div>
+
+  @switch (mode()) {
+    @case ('single') {
+      <!-- Action Check: route dong-goi/check -->
+      <router-outlet />
+    }
+    @case ('multi') {
+      <app-empty />
+    }
+  }
+</div>

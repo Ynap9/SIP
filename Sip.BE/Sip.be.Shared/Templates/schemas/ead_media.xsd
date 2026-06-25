@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           elementFormDefault="qualified"
+           attributeFormDefault="unqualified">
+
+    <xs:complexType name="elementContainer">
+        <xs:all>
+            <xs:element type="xs:string" name="arcDocCode"/>
+            <xs:element type="xs:string" name="maintenance"/>
+            <xs:element type="xs:string" name="typeMedia"/>
+            <xs:element type="xs:string" name="archivesNumber"/>
+            <xs:element type="xs:string" name="inforSign"/>
+            <xs:element type="xs:string" name="eventName"/>
+            <xs:element type="xs:string" name="movieTitle"/>
+            <xs:element type="xs:string" name="recorder"/>
+            <xs:element type="xs:string" name="recordPlace"/>
+            <xs:element type="xs:string" name="recordDate"/>
+            <xs:element type="xs:string" name="language"/>
+            <xs:element type="xs:string" name="playTime"/>
+            <xs:element type="xs:string" name="docAttached"/>
+            <xs:element type="xs:string" name="mode"/>
+            <xs:element type="xs:string" name="quality"/>
+            <xs:element type="xs:string" name="format"/>
+            <xs:element type="xs:string" name="riskRecovery"/>
+            <xs:element type="xs:string" name="riskRecoveryStatus"/>
+            <xs:element type="xs:string" name="description"/>
+        </xs:all>
+    </xs:complexType>
+
+    <xs:element name="simpledc" type="elementContainer"/>
+
+</xs:schema>

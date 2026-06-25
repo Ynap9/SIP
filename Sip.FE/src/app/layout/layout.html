@@ -1,0 +1,17 @@
+<p-toast />
+<p-confirmdialog />
+
+<div class="layout-wrapper" [ngClass]="containerClass">
+  <app-topbar />
+  <app-sidebar />
+
+  <div class="layout-main-container">
+    <main class="layout-main">
+      <router-outlet />
+    </main>
+    <app-footer />
+  </div>
+
+  <!-- Lớp nền mờ (mobile) - bấm để đóng menu -->
+  <div class="layout-mask" (click)="layoutService.hideMenu()"></div>
+</div>

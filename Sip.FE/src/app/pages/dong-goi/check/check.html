@@ -1,0 +1,146 @@
+<div class="flex flex-col gap-4">
+  <!-- 1. Khu vực đưa thư mục vào -->
+  <div
+    class="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed py-12 transition-colors"
+    [ngClass]="isDragOver() ? 'border-indigo-500 bg-indigo-50' : 'border-slate-300 bg-slate-50'"
+    (dragover)="onDragOver($event)"
+    (dragleave)="onDragLeave($event)"
+    (drop)="onDrop($event)"
+  >
+    <i class="pi pi-folder-open text-3xl text-slate-400"></i>
+    <p class="font-medium text-slate-600">Hãy đưa thư mục cần kiểm tra vào đây!</p>
+    @if (folderPath()) {
+      <p class="text-sm text-indigo-600 break-all px-4 text-center">{{ folderPath() }}</p>
+    }
+    @if (desktop.isDesktop) {
+      <p-button label="Chọn thư mục" icon="pi pi-folder-open" severity="secondary" [outlined]="true" (onClick)="chooseFolder()" />
+    }
+  </div>
+
+  @if (!desktop.isDesktop) {
+    <!-- TEMP: dán đường dẫn tuyệt đối để test trên web-dev (chỉ hiện khi KHÔNG phải desktop) -->
+    <div class="flex items-center gap-2">
+      <label class="font-medium whitespace-nowrap">Đường dẫn (TEMP):</label>
+      <input
+        pInputText
+        class="flex-1"
+        placeholder="Dán đường dẫn tuyệt đối tới thư mục hồ sơ"
+        [ngModel]="folderPath()"
+        (ngModelChange)="folderPath.set($event)"
+      />
+    </div>
+  }
+
+  <!-- 2. Tiến trình + bảng (sinh ở giữa box và nút) -->
+  @if (running() || completed()) {
+    <p-progressbar [value]="percent()" />
+  }
+
+  @if (fileRows().length) {
+    <p-table [value]="fileRows()" [showGridlines]="true" [tableStyle]="{ 'min-width': '50rem' }">
+      <ng-template pTemplate="header">
+        <tr>
+          <th style="width: 4rem; text-align: center">STT</th>
+          <th style="text-align: center">Tên file (mã lưu trữ tài liệu)</th>
+          <th style="width: 9rem; text-align: center">Trạng thái</th>
+          <th style="width: 9rem; text-align: center">Tình trạng</th>
+          <th style="text-align: center">Nguyên nhân lỗi</th>
+        </tr>
+      </ng-template>
+
+      <ng-template pTemplate="body" let-row let-i="rowIndex">
+        <tr>
+          <td style="text-align: center">{{ i + 1 }}</td>
+          <td style="text-align: center" class="break-all">{{ row.name }}</td>
+
+          <!-- Trạng thái: đã xử lý xong chưa (xong = tích xanh, kể cả file có lỗi) -->
+          <td style="text-align: center">
+            @switch (row.status) {
+              @case ('processing') {
+                <i class="pi pi-spin pi-spinner text-slate-500"></i>
+              }
+              @default {
+                <i class="pi pi-check-circle text-green-600"></i>
+              }
+            }
+          </td>
+
+          <!-- Tình trạng: đúng (ô vuông tích xanh) / lỗi (ô vuông X đỏ) -->
+          <td style="text-align: center">
+            @switch (row.status) {
+              @case ('ok') {
+                <span class="inline-flex h-5 w-5 items-center justify-center rounded border-2 border-green-500 bg-green-500 text-white">
+                  <i class="pi pi-check" style="font-size: 0.7rem"></i>
+                </span>
+              }
+              @case ('error') {
+                <span class="inline-flex h-5 w-5 items-center justify-center rounded border-2 border-red-500 bg-red-500 text-white">
+                  <i class="pi pi-times" style="font-size: 0.7rem"></i>
+                </span>
+              }
+              @default {
+                <span class="text-slate-300">—</span>
+              }
+            }
+          </td>
+
+          <td style="text-align: center" class="text-red-600">{{ row.reason }}</td>
+        </tr>
+      </ng-template>
+
+      <!-- Dòng cuối: thông tin tổng kết hồ sơ -->
+      <ng-template pTemplate="footer">
+        <tr class="bg-slate-50">
+          <td colspan="2" style="text-align: center" class="font-semibold">Kết quả hồ sơ</td>
+          <td style="text-align: center">
+            @switch (hoSo().status) {
+              @case ('processing') {
+                <i class="pi pi-spin pi-spinner text-slate-500"></i>
+              }
+              @default {
+                <i class="pi pi-check-circle text-green-600"></i>
+              }
+            }
+          </td>
+          <td style="text-align: center">
+            @switch (hoSo().status) {
+              @case ('ok') {
+                <span class="inline-flex h-5 w-5 items-center justify-center rounded border-2 border-green-500 bg-green-500 text-white">
+                  <i class="pi pi-check" style="font-size: 0.7rem"></i>
+                </span>
+              }
+              @case ('error') {
+                <span class="inline-flex h-5 w-5 items-center justify-center rounded border-2 border-red-500 bg-red-500 text-white">
+                  <i class="pi pi-times" style="font-size: 0.7rem"></i>
+                </span>
+              }
+              @default {
+                <span class="text-slate-300">—</span>
+              }
+            }
+          </td>
+          <td style="text-align: center" [class.text-red-600]="hoSo().status === 'error'">
+            {{ hoSo().reason }}
+          </td>
+        </tr>
+      </ng-template>
+    </p-table>
+  }
+
+  <!-- 3. Nút: canh phải, dưới cùng -->
+  <div class="flex items-center justify-end gap-2">
+    <p-button
+      label="Kiểm tra"
+      icon="pi pi-search"
+      [disabled]="!canCheck()"
+      [loading]="running()"
+      (onClick)="startCheck()"
+    />
+    @if (completed()) {
+      <p-button label="Đóng gói" icon="pi pi-box" severity="success" (onClick)="onPackage()" />
+    }
+  </div>
+
+  <!-- Popup đóng gói -->
+  <app-package-dialog [folderPath]="folderPath()" [(visible)]="showPackageDialog" />
+</div>

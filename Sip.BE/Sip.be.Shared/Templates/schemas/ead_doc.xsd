@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           elementFormDefault="qualified"
+           attributeFormDefault="unqualified">
+
+    <xs:complexType name="elementContainer">
+        <xs:all>
+            <xs:element type="xs:string" name="docId"/>
+            <xs:element type="xs:string" name="arcDocCode"/>
+            <xs:element type="xs:string" name="maintenance"/>
+            <xs:element type="xs:string" name="typeName"/>
+            <xs:element type="xs:string" name="codeNumber"/>
+            <xs:element type="xs:string" name="codeNotation"/>
+            <xs:element type="xs:string" name="issuedDate"/>
+            <xs:element type="xs:string" name="organName"/>
+            <xs:element type="xs:string" name="subject"/>
+            <xs:element type="xs:string" name="language"/>
+            <xs:element type="xs:string" name="numberOfPage"/>
+            <xs:element type="xs:string" name="inforSign"/>
+            <xs:element type="xs:string" name="keyword"/>
+            <xs:element type="xs:string" name="mode"/>
+            <xs:element type="xs:string" name="confidenceLevel"/>
+            <xs:element type="xs:string" name="autograph"/>
+            <xs:element type="xs:string" name="format"/>
+            <xs:element type="xs:string" name="process"/>
+            <xs:element type="xs:string" name="riskRecovery"/>
+            <xs:element type="xs:string" name="riskRecoveryStatus"/>
+            <xs:element type="xs:string" name="description"/>
+        </xs:all>
+    </xs:complexType>
+
+    <xs:element name="simpledc" type="elementContainer"/>
+
+</xs:schema>

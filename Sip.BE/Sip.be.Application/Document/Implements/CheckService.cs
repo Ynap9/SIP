@@ -1,0 +1,804 @@
+using AutoMapper;
+using ClosedXML.Excel;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Sip.be.Application.Base;
+using Sip.be.Application.Document.Dtos.Check;
+using Sip.be.Application.Document.Interfaces;
+using Sip.be.infratructure.Persistence;
+using Sip.be.Shared.Constants.Check;
+using Sip.be.Shared.Constants.Documents;
+using Sip.be.Shared.Request;
+using Sip.be.Shared.Request.ErrorRequest;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace Sip.be.Application.Document.Implements
+{
+    public class CheckService : BaseService, ICheckService
+    {
+        // Pattern nhận diện 1 dòng "mã: nhãn" trong mô tả (vd: "22: Công văn")
+        private const string OptionPattern = @"^([A-Za-z0-9]{1,4})\s*[:：]\s*(.+)$";
+
+        public CheckService(SipDbContext sipDbContext, ILogger<BaseService> logger, IMapper mapper) : base(sipDbContext, logger, mapper)
+        {
+        }
+
+        // Wrapper: ước lượng tổng số bước rồi đóng dấu Current/Total (=> Percent) lên từng event để FE vẽ thanh tiến trình realtime.
+        public async IAsyncEnumerable<CheckProgressDto> CheckHoSoFolderAsync(CheckHoSoFolderRequestDto input, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            var total = 1;
+            var folderPath = input?.FolderPath?.Trim();
+            if (!string.IsNullOrWhiteSpace(folderPath) && Directory.Exists(folderPath))
+            {
+                var metadataDir = Directory.GetDirectories(folderPath)
+                    .FirstOrDefault(d => string.Equals(new DirectoryInfo(d).Name, CheckConstants.MetadataFolderName, StringComparison.OrdinalIgnoreCase));
+                var attachmentDir = Directory.GetDirectories(folderPath)
+                    .FirstOrDefault(d => string.Equals(new DirectoryInfo(d).Name, CheckConstants.AttachmentFolderName, StringComparison.OrdinalIgnoreCase));
+                var excelPath = metadataDir == null
+                    ? null
+                    : Directory.GetFiles(metadataDir).FirstOrDefault(f => CheckConstants.ExcelExtensions.Contains(Path.GetExtension(f)));
+
+                if (attachmentDir != null && excelPath != null)
+                {
+                    var attachmentCount = Directory.GetFiles(attachmentDir).Length;
+                    var vanBanRows = 0;
+                    try
+                    {
+                        using var wb = new XLWorkbook(excelPath);
+                        if (wb.Worksheets.TryGetWorksheet(CheckConstants.SheetVanBan, out var vanBanSheet))
+                        {
+                            vanBanRows = vanBanSheet.RowsUsed().Skip(1).Count();
+                        }
+                    }
+                    catch { /* lỗi đọc excel sẽ được StreamEventsAsync báo, total để mặc định */ }
+
+                    var configHoSo = await _sipDbContext.ConfigHoSo.Where(x => !x.Deleted).CountAsync(cancellationToken);
+                    var configVanBan = await _sipDbContext.ConfigVanBan.Where(x => !x.Deleted).CountAsync(cancellationToken);
+
+                    // structure(5) + attachment ticks(2 lượt) + maHoSo(1) + nội dung(hoSo + vanBan*dòng) + summaries(3) + done(1)
+                    total = 5 + attachmentCount * 2 + 1 + configHoSo + configVanBan * vanBanRows + 3 + 1;
+                }
+            }
+
+            var current = 0;
+            await foreach (var ev in StreamEventsAsync(input, cancellationToken))
+            {
+                current++;
+                if (ev.Completed) total = current;                 // chốt đúng 100% ở event cuối
+                ev.Current = current;
+                ev.Total = total < current ? current : total;      // tránh vượt 100%
+                yield return ev;
+            }
+        }
+
+        private async IAsyncEnumerable<CheckProgressDto> StreamEventsAsync(CheckHoSoFolderRequestDto input, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            _logger.LogInformation($"{nameof(CheckHoSoFolderAsync)}, folderPath = {input?.FolderPath}");
+
+            var folderPath = input?.FolderPath?.Trim();
+            var errorCount = 0;
+
+            // ========================= TIỀN ĐIỀU KIỆN =========================
+            if (string.IsNullOrWhiteSpace(folderPath) || !Directory.Exists(folderPath))
+            {
+                yield return new CheckProgressDto
+                {
+                    Stage = (int)CheckStage.FolderStructure,
+                    StageName = CheckConstants.StageNameFolderStructure,
+                    TargetType = CheckConstants.TargetTypeFolder,
+                    Target = folderPath ?? string.Empty,
+                    Status = StatusCodeE.Error,
+                    Code = ErrorCodes.FolderNotFound,
+                    Message = $"Không tìm thấy thư mục hồ sơ: '{folderPath}'.",
+                    Completed = true
+                };
+                yield break;
+            }
+
+            var hoSoFolderName = new DirectoryInfo(folderPath).Name;
+
+            // ===================== GIAI ĐOẠN 1: CẤU TRÚC ======================
+
+            // 1.1 Thư mục metadata
+            var metadataDir = Directory.GetDirectories(folderPath)
+                .FirstOrDefault(d => string.Equals(new DirectoryInfo(d).Name, CheckConstants.MetadataFolderName, StringComparison.OrdinalIgnoreCase));
+            if (metadataDir == null)
+            {
+                yield return new CheckProgressDto
+                {
+                    Stage = (int)CheckStage.FolderStructure,
+                    StageName = CheckConstants.StageNameFolderStructure,
+                    TargetType = CheckConstants.TargetTypeFolder,
+                    Target = CheckConstants.MetadataFolderName,
+                    Status = StatusCodeE.Error,
+                    Code = ErrorCodes.MetadataFolderMissing,
+                    Message = $"Thiếu thư mục '{CheckConstants.MetadataFolderName}' trong hồ sơ.",
+                    Completed = true
+                };
+                yield break;
+            }
+            yield return new CheckProgressDto
+            {
+                Stage = (int)CheckStage.FolderStructure,
+                StageName = CheckConstants.StageNameFolderStructure,
+                TargetType = CheckConstants.TargetTypeFolder,
+                Target = CheckConstants.MetadataFolderName,
+                Status = StatusCodeE.Success,
+                Code = 200,
+                Message = "Thư mục metadata hợp lệ."
+            };
+
+            // 1.2 Thư mục attachment
+            var attachmentDir = Directory.GetDirectories(folderPath)
+                .FirstOrDefault(d => string.Equals(new DirectoryInfo(d).Name, CheckConstants.AttachmentFolderName, StringComparison.OrdinalIgnoreCase));
+            if (attachmentDir == null)
+            {
+                yield return new CheckProgressDto
+                {
+                    Stage = (int)CheckStage.FolderStructure,
+                    StageName = CheckConstants.StageNameFolderStructure,
+                    TargetType = CheckConstants.TargetTypeFolder,
+                    Target = CheckConstants.AttachmentFolderName,
+                    Status = StatusCodeE.Error,
+                    Code = ErrorCodes.AttachmentFolderMissing,
+                    Message = $"Thiếu thư mục '{CheckConstants.AttachmentFolderName}' trong hồ sơ.",
+                    Completed = true
+                };
+                yield break;
+            }
+            yield return new CheckProgressDto
+            {
+                Stage = (int)CheckStage.FolderStructure,
+                StageName = CheckConstants.StageNameFolderStructure,
+                TargetType = CheckConstants.TargetTypeFolder,
+                Target = CheckConstants.AttachmentFolderName,
+                Status = StatusCodeE.Success,
+                Code = 200,
+                Message = "Thư mục attachment hợp lệ."
+            };
+
+            // Manifest: load tên file đính kèm để FE hiển thị bảng TRƯỚC khi gọi quá trình xử lý khác
+            yield return new CheckProgressDto
+            {
+                Stage = (int)CheckStage.FolderStructure,
+                StageName = CheckConstants.StageNameFolderStructure,
+                TargetType = "manifest",
+                Files = Directory.GetFiles(attachmentDir).Select(Path.GetFileName).ToList(),
+                Status = StatusCodeE.Success,
+                Code = 200
+            };
+
+            // 1.3 File Excel trong metadata
+            var excelPath = Directory.GetFiles(metadataDir)
+                .FirstOrDefault(f => CheckConstants.ExcelExtensions.Contains(Path.GetExtension(f)));
+            if (excelPath == null)
+            {
+                yield return new CheckProgressDto
+                {
+                    Stage = (int)CheckStage.FolderStructure,
+                    StageName = CheckConstants.StageNameFolderStructure,
+                    TargetType = CheckConstants.TargetTypeFile,
+                    Target = CheckConstants.MetadataFolderName,
+                    Status = StatusCodeE.Error,
+                    Code = ErrorCodes.ExcelFileMissing,
+                    Message = $"Thư mục '{CheckConstants.MetadataFolderName}' không chứa file Excel.",
+                    Completed = true
+                };
+                yield break;
+            }
+
+            // Mở workbook (try/catch không chứa yield)
+            XLWorkbook workbook = null;
+            var openError = false;
+            try
+            {
+                workbook = new XLWorkbook(excelPath);
+            }
+            catch
+            {
+                openError = true;
+            }
+            if (openError || workbook == null)
+            {
+                yield return new CheckProgressDto
+                {
+                    Stage = (int)CheckStage.FolderStructure,
+                    StageName = CheckConstants.StageNameFolderStructure,
+                    TargetType = CheckConstants.TargetTypeFile,
+                    Target = Path.GetFileName(excelPath),
+                    Status = StatusCodeE.Error,
+                    Code = ErrorCodes.ExcelFileUnreadable,
+                    Message = $"Không đọc được nội dung file Excel '{Path.GetFileName(excelPath)}'.",
+                    Completed = true
+                };
+                yield break;
+            }
+
+            using (workbook)
+            {
+                yield return new CheckProgressDto
+                {
+                    Stage = (int)CheckStage.FolderStructure,
+                    StageName = CheckConstants.StageNameFolderStructure,
+                    TargetType = CheckConstants.TargetTypeFile,
+                    Target = Path.GetFileName(excelPath),
+                    Status = StatusCodeE.Success,
+                    Code = 200,
+                    Message = "Đọc được nội dung file Excel."
+                };
+
+                // 1.4 File đính kèm trong attachment
+                var attachmentFiles = Directory.GetFiles(attachmentDir);
+                if (attachmentFiles.Length == 0)
+                {
+                    yield return new CheckProgressDto
+                    {
+                        Stage = (int)CheckStage.FolderStructure,
+                        StageName = CheckConstants.StageNameFolderStructure,
+                        TargetType = CheckConstants.TargetTypeFolder,
+                        Target = CheckConstants.AttachmentFolderName,
+                        Status = StatusCodeE.Error,
+                        Code = ErrorCodes.AttachmentEmpty,
+                        Message = $"Thư mục '{CheckConstants.AttachmentFolderName}' không có file đính kèm nào.",
+                        Completed = true
+                    };
+                    yield break;
+                }
+
+                foreach (var file in attachmentFiles)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var fileName = Path.GetFileName(file);
+                    if (!CheckConstants.AllowedAttachmentExtensions.Contains(Path.GetExtension(file)))
+                    {
+                        errorCount++;
+                        yield return new CheckProgressDto
+                        {
+                            Stage = (int)CheckStage.FolderStructure,
+                            StageName = CheckConstants.StageNameFolderStructure,
+                            TargetType = CheckConstants.TargetTypeFile,
+                            Target = fileName,
+                            Status = StatusCodeE.Error,
+                            Code = ErrorCodes.AttachmentInvalidType,
+                            Message = $"File '{fileName}' có định dạng không được hỗ trợ (chỉ chấp nhận PDF, hình ảnh, âm thanh, phim)."
+                        };
+                    }
+                    else
+                    {
+                        yield return new CheckProgressDto
+                        {
+                            Stage = (int)CheckStage.FolderStructure,
+                            StageName = CheckConstants.StageNameFolderStructure,
+                            TargetType = CheckConstants.TargetTypeFile,
+                            Target = fileName,
+                            Status = StatusCodeE.Success,
+                            Code = 200,
+                            Message = "Định dạng file đính kèm hợp lệ."
+                        };
+                    }
+                }
+
+                // 1.5 Đủ 2 sheet Ho_so và Van_ban
+                if (!workbook.Worksheets.TryGetWorksheet(CheckConstants.SheetHoSo, out var hoSoSheet))
+                {
+                    yield return new CheckProgressDto
+                    {
+                        Stage = (int)CheckStage.FolderStructure,
+                        StageName = CheckConstants.StageNameFolderStructure,
+                        TargetType = CheckConstants.TargetTypeSheet,
+                        Target = CheckConstants.SheetHoSo,
+                        Status = StatusCodeE.Error,
+                        Code = ErrorCodes.SheetMissing,
+                        Message = $"File Excel thiếu sheet '{CheckConstants.SheetHoSo}'.",
+                        Completed = true
+                    };
+                    yield break;
+                }
+                yield return new CheckProgressDto
+                {
+                    Stage = (int)CheckStage.FolderStructure,
+                    StageName = CheckConstants.StageNameFolderStructure,
+                    TargetType = CheckConstants.TargetTypeSheet,
+                    Target = CheckConstants.SheetHoSo,
+                    Status = StatusCodeE.Success,
+                    Code = 200,
+                    Message = $"Tồn tại sheet '{CheckConstants.SheetHoSo}'."
+                };
+
+                if (!workbook.Worksheets.TryGetWorksheet(CheckConstants.SheetVanBan, out var vanBanSheet))
+                {
+                    yield return new CheckProgressDto
+                    {
+                        Stage = (int)CheckStage.FolderStructure,
+                        StageName = CheckConstants.StageNameFolderStructure,
+                        TargetType = CheckConstants.TargetTypeSheet,
+                        Target = CheckConstants.SheetVanBan,
+                        Status = StatusCodeE.Error,
+                        Code = ErrorCodes.SheetMissing,
+                        Message = $"File Excel thiếu sheet '{CheckConstants.SheetVanBan}'.",
+                        Completed = true
+                    };
+                    yield break;
+                }
+                yield return new CheckProgressDto
+                {
+                    Stage = (int)CheckStage.FolderStructure,
+                    StageName = CheckConstants.StageNameFolderStructure,
+                    TargetType = CheckConstants.TargetTypeSheet,
+                    Target = CheckConstants.SheetVanBan,
+                    Status = StatusCodeE.Success,
+                    Code = 200,
+                    Message = $"Tồn tại sheet '{CheckConstants.SheetVanBan}'."
+                };
+
+                // Tổng kết giai đoạn 1
+                yield return new CheckProgressDto
+                {
+                    Stage = (int)CheckStage.FolderStructure,
+                    StageName = CheckConstants.StageNameFolderStructure,
+                    TargetType = CheckConstants.TargetTypeSummary,
+                    Target = CheckConstants.StageNameFolderStructure,
+                    Status = errorCount == 0 ? StatusCodeE.Success : StatusCodeE.Error,
+                    Code = errorCount == 0 ? 200 : ErrorCodes.CheckHasErrors,
+                    Message = errorCount == 0 ? "Cấu trúc thư mục chính xác." : "Cấu trúc thư mục có lỗi, xem chi tiết các file."
+                };
+
+                // Map cột theo header (header có thể null nếu sheet trống)
+                var hoSoColumns = hoSoSheet.FirstRowUsed() is { } hoSoHeader
+                    ? hoSoHeader.CellsUsed()
+                        .Where(c => !string.IsNullOrWhiteSpace(c.GetString()))
+                        .GroupBy(c => c.GetString().Trim(), StringComparer.OrdinalIgnoreCase)
+                        .ToDictionary(g => g.Key, g => g.First().Address.ColumnNumber, StringComparer.OrdinalIgnoreCase)
+                    : new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+                var vanBanColumns = vanBanSheet.FirstRowUsed() is { } vanBanHeader
+                    ? vanBanHeader.CellsUsed()
+                        .Where(c => !string.IsNullOrWhiteSpace(c.GetString()))
+                        .GroupBy(c => c.GetString().Trim(), StringComparer.OrdinalIgnoreCase)
+                        .ToDictionary(g => g.Key, g => g.First().Address.ColumnNumber, StringComparer.OrdinalIgnoreCase)
+                    : new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+                var hoSoDataRow = hoSoSheet.RowsUsed().Skip(1).FirstOrDefault();
+                var vanBanDataRows = vanBanSheet.RowsUsed().Skip(1).ToList();
+
+                // ==================== GIAI ĐOẠN 2: KHỚP MÃ ====================
+
+                // 2.1 Mã hồ sơ trong sheet Ho_so khớp với tên thư mục
+                if (hoSoDataRow == null || !hoSoColumns.TryGetValue(CheckConstants.ColMaHoSo, out var maHoSoCol))
+                {
+                    errorCount++;
+                    yield return new CheckProgressDto
+                    {
+                        Stage = (int)CheckStage.CodeMatching,
+                        StageName = CheckConstants.StageNameCodeMatching,
+                        TargetType = CheckConstants.TargetTypeCode,
+                        Target = CheckConstants.ColMaHoSo,
+                        Status = StatusCodeE.Error,
+                        Code = ErrorCodes.ColumnMissing,
+                        Message = $"Sheet '{CheckConstants.SheetHoSo}' thiếu cột '{CheckConstants.ColMaHoSo}' hoặc không có dữ liệu."
+                    };
+                }
+                else
+                {
+                    var maHoSo = hoSoDataRow.Cell(maHoSoCol).GetString().Trim();
+                    if (!string.Equals(maHoSo, hoSoFolderName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        errorCount++;
+                        yield return new CheckProgressDto
+                        {
+                            Stage = (int)CheckStage.CodeMatching,
+                            StageName = CheckConstants.StageNameCodeMatching,
+                            TargetType = CheckConstants.TargetTypeCode,
+                            Target = maHoSo,
+                            Status = StatusCodeE.Error,
+                            Code = ErrorCodes.HoSoCodeMismatch,
+                            Message = $"Mã hồ sơ trong file ('{maHoSo}') không khớp với tên thư mục ('{hoSoFolderName}')."
+                        };
+                    }
+                    else
+                    {
+                        yield return new CheckProgressDto
+                        {
+                            Stage = (int)CheckStage.CodeMatching,
+                            StageName = CheckConstants.StageNameCodeMatching,
+                            TargetType = CheckConstants.TargetTypeCode,
+                            Target = maHoSo,
+                            Status = StatusCodeE.Success,
+                            Code = 200,
+                            Message = $"Mã hồ sơ khớp với tên thư mục ('{hoSoFolderName}')."
+                        };
+                    }
+                }
+
+                // 2.2 Mã định danh tài liệu khớp với tên file đính kèm (không thừa, không thiếu)
+                if (!vanBanColumns.TryGetValue(CheckConstants.ColMaLuuTruTaiLieu, out var maTaiLieuCol))
+                {
+                    errorCount++;
+                    yield return new CheckProgressDto
+                    {
+                        Stage = (int)CheckStage.CodeMatching,
+                        StageName = CheckConstants.StageNameCodeMatching,
+                        TargetType = CheckConstants.TargetTypeCode,
+                        Target = CheckConstants.ColMaLuuTruTaiLieu,
+                        Status = StatusCodeE.Error,
+                        Code = ErrorCodes.ColumnMissing,
+                        Message = $"Sheet '{CheckConstants.SheetVanBan}' thiếu cột '{CheckConstants.ColMaLuuTruTaiLieu}'."
+                    };
+                }
+                else
+                {
+                    var maTaiLieuSet = new HashSet<string>(
+                        vanBanDataRows
+                            .Select(r => r.Cell(maTaiLieuCol).GetString().Trim())
+                            .Where(v => !string.IsNullOrWhiteSpace(v)),
+                        StringComparer.OrdinalIgnoreCase);
+
+                    var fileNameSet = new HashSet<string>(
+                        attachmentFiles.Select(f => Path.GetFileNameWithoutExtension(f)),
+                        StringComparer.OrdinalIgnoreCase);
+
+                    // Mỗi file đính kèm phải có mã định danh tương ứng (phát hiện file thừa)
+                    foreach (var file in attachmentFiles)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        var fileName = Path.GetFileName(file);
+                        var nameNoExt = Path.GetFileNameWithoutExtension(file);
+                        if (maTaiLieuSet.Contains(nameNoExt))
+                        {
+                            yield return new CheckProgressDto
+                            {
+                                Stage = (int)CheckStage.CodeMatching,
+                                StageName = CheckConstants.StageNameCodeMatching,
+                                TargetType = CheckConstants.TargetTypeFile,
+                                Target = fileName,
+                                Status = StatusCodeE.Success,
+                                Code = 200,
+                                Message = "File đính kèm khớp với mã định danh tài liệu."
+                            };
+                        }
+                        else
+                        {
+                            errorCount++;
+                            yield return new CheckProgressDto
+                            {
+                                Stage = (int)CheckStage.CodeMatching,
+                                StageName = CheckConstants.StageNameCodeMatching,
+                                TargetType = CheckConstants.TargetTypeFile,
+                                Target = fileName,
+                                Status = StatusCodeE.Error,
+                                Code = ErrorCodes.AttachmentExtraFile,
+                                Message = $"File '{fileName}' không có mã định danh tài liệu tương ứng trong sheet '{CheckConstants.SheetVanBan}'."
+                            };
+                        }
+                    }
+
+                    // Mỗi mã định danh phải có file (phát hiện file thiếu)
+                    foreach (var ma in maTaiLieuSet)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        if (!fileNameSet.Contains(ma))
+                        {
+                            errorCount++;
+                            yield return new CheckProgressDto
+                            {
+                                Stage = (int)CheckStage.CodeMatching,
+                                StageName = CheckConstants.StageNameCodeMatching,
+                                TargetType = CheckConstants.TargetTypeCode,
+                                Target = ma,
+                                Status = StatusCodeE.Error,
+                                Code = ErrorCodes.AttachmentMissingForCode,
+                                Message = $"Mã định danh tài liệu '{ma}' không có file đính kèm tương ứng trong thư mục attachment."
+                            };
+                        }
+                    }
+                }
+
+                // Tổng kết giai đoạn 2
+                yield return new CheckProgressDto
+                {
+                    Stage = (int)CheckStage.CodeMatching,
+                    StageName = CheckConstants.StageNameCodeMatching,
+                    TargetType = CheckConstants.TargetTypeSummary,
+                    Target = CheckConstants.StageNameCodeMatching,
+                    Status = errorCount == 0 ? StatusCodeE.Success : StatusCodeE.Error,
+                    Code = errorCount == 0 ? 200 : ErrorCodes.CheckHasErrors,
+                    Message = errorCount == 0 ? "Mã hồ sơ và mã định danh tài liệu khớp chính xác." : "Có sai lệch về mã hồ sơ / mã định danh tài liệu, xem chi tiết."
+                };
+
+                // ================== GIAI ĐOẠN 3: NỘI DUNG EXCEL ==================
+
+                // Mô tả chuẩn lấy từ 2 bảng config trong DB (chưa bị xoá mềm)
+                var configHoSo = await _sipDbContext.ConfigHoSo.Where(x => !x.Deleted).ToListAsync(cancellationToken);
+                var configVanBan = await _sipDbContext.ConfigVanBan.Where(x => !x.Deleted).ToListAsync(cancellationToken);
+
+                // 3.1 Sheet Ho_so (1 hồ sơ = 1 dòng dữ liệu)
+                if (configHoSo.Count == 0)
+                {
+                    yield return new CheckProgressDto
+                    {
+                        Stage = (int)CheckStage.ExcelContent,
+                        StageName = CheckConstants.StageNameExcelContent,
+                        TargetType = CheckConstants.TargetTypeSheet,
+                        Target = CheckConstants.SheetHoSo,
+                        Status = StatusCodeE.Error,
+                        Code = ErrorCodes.ConfigEmpty,
+                        Message = $"Chưa có cấu hình mô tả cho '{CheckConstants.SheetHoSo}' trong hệ thống để đối chiếu."
+                    };
+                }
+                else if (hoSoDataRow == null)
+                {
+                    errorCount++;
+                    yield return new CheckProgressDto
+                    {
+                        Stage = (int)CheckStage.ExcelContent,
+                        StageName = CheckConstants.StageNameExcelContent,
+                        TargetType = CheckConstants.TargetTypeSheet,
+                        Target = CheckConstants.SheetHoSo,
+                        Status = StatusCodeE.Error,
+                        Code = ErrorCodes.RequiredFieldEmpty,
+                        Message = $"Sheet '{CheckConstants.SheetHoSo}' không có dòng dữ liệu."
+                    };
+                }
+                else
+                {
+                    foreach (var cfg in configHoSo)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        var isRequired = cfg.BatBuoc == ConfigConstants.BatBuoc;
+
+                        // Không có cột: lỗi nếu bắt buộc, ngược lại bỏ qua
+                        if (!hoSoColumns.TryGetValue(cfg.TruongThongTin, out var col))
+                        {
+                            if (isRequired)
+                            {
+                                errorCount++;
+                                yield return new CheckProgressDto
+                                {
+                                    Stage = (int)CheckStage.ExcelContent,
+                                    StageName = CheckConstants.StageNameExcelContent,
+                                    TargetType = CheckConstants.TargetTypeField,
+                                    Target = cfg.TruongThongTin,
+                                    Status = StatusCodeE.Error,
+                                    Code = ErrorCodes.ColumnMissing,
+                                    Message = $"Sheet '{CheckConstants.SheetHoSo}' thiếu cột bắt buộc '{cfg.TruongThongTin}'."
+                                };
+                            }
+                            continue;
+                        }
+
+                        var value = hoSoDataRow.Cell(col).GetString().Trim();
+
+                        // Trống: lỗi nếu bắt buộc, ngược lại bỏ qua
+                        if (string.IsNullOrWhiteSpace(value))
+                        {
+                            if (isRequired)
+                            {
+                                errorCount++;
+                                yield return new CheckProgressDto
+                                {
+                                    Stage = (int)CheckStage.ExcelContent,
+                                    StageName = CheckConstants.StageNameExcelContent,
+                                    TargetType = CheckConstants.TargetTypeField,
+                                    Target = cfg.TruongThongTin,
+                                    Status = StatusCodeE.Error,
+                                    Code = ErrorCodes.RequiredFieldEmpty,
+                                    Message = $"Trường bắt buộc '{cfg.TruongThongTin}' đang để trống."
+                                };
+                            }
+                            continue;
+                        }
+
+                        // Có dữ liệu (kể cả trường không bắt buộc): đối chiếu nội dung với mô tả.
+                        // Nếu mô tả là danh sách giá trị ("mã: nhãn") thì giá trị phải nằm trong danh sách.
+                        var options = (cfg.MoTa ?? string.Empty).Split('\n')
+                            .Select(line => Regex.Match(line.Trim(), OptionPattern))
+                            .Where(m => m.Success)
+                            .ToList();
+                        var isEnum = options.Count >= 2;
+
+                        if (isEnum)
+                        {
+                            var allowed = new HashSet<string>(
+                                options.SelectMany(m => new[]
+                                {
+                                    m.Groups[1].Value.Trim(),
+                                    m.Groups[2].Value.Trim(),
+                                    m.Groups[1].Value.Trim() + ":" + m.Groups[2].Value.Trim()
+                                })
+                                .Select(x => string.Join(' ', x.ToLowerInvariant().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).Replace(": ", ":").Replace(" :", ":")),
+                                StringComparer.Ordinal);
+
+                            var normalizedValue = string.Join(' ', value.ToLowerInvariant().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).Replace(": ", ":").Replace(" :", ":");
+
+                            if (!allowed.Contains(normalizedValue))
+                            {
+                                errorCount++;
+                                yield return new CheckProgressDto
+                                {
+                                    Stage = (int)CheckStage.ExcelContent,
+                                    StageName = CheckConstants.StageNameExcelContent,
+                                    TargetType = CheckConstants.TargetTypeField,
+                                    Target = cfg.TruongThongTin,
+                                    Status = StatusCodeE.Error,
+                                    Code = ErrorCodes.FieldContentInvalid,
+                                    Message = $"Trường '{cfg.TruongThongTin}' có giá trị '{value}' không nằm trong danh sách giá trị cho phép theo mô tả."
+                                };
+                                continue;
+                            }
+                        }
+
+                        yield return new CheckProgressDto
+                        {
+                            Stage = (int)CheckStage.ExcelContent,
+                            StageName = CheckConstants.StageNameExcelContent,
+                            TargetType = CheckConstants.TargetTypeField,
+                            Target = cfg.TruongThongTin,
+                            Status = StatusCodeE.Success,
+                            Code = 200,
+                            Message = $"Trường '{cfg.TruongThongTin}' hợp lệ."
+                        };
+                    }
+                }
+
+                // 3.2 Sheet Van_ban (nhiều dòng = nhiều tài liệu)
+                if (configVanBan.Count == 0)
+                {
+                    yield return new CheckProgressDto
+                    {
+                        Stage = (int)CheckStage.ExcelContent,
+                        StageName = CheckConstants.StageNameExcelContent,
+                        TargetType = CheckConstants.TargetTypeSheet,
+                        Target = CheckConstants.SheetVanBan,
+                        Status = StatusCodeE.Error,
+                        Code = ErrorCodes.ConfigEmpty,
+                        Message = $"Chưa có cấu hình mô tả cho '{CheckConstants.SheetVanBan}' trong hệ thống để đối chiếu."
+                    };
+                }
+                else
+                {
+                    var rowIndex = 0;
+                    foreach (var row in vanBanDataRows)
+                    {
+                        rowIndex++;
+                        var rowLabel = vanBanColumns.TryGetValue(CheckConstants.ColMaLuuTruTaiLieu, out var idCol)
+                            ? row.Cell(idCol).GetString().Trim()
+                            : string.Empty;
+                        if (string.IsNullOrWhiteSpace(rowLabel)) rowLabel = $"Dòng {rowIndex}";
+
+                        foreach (var cfg in configVanBan)
+                        {
+                            cancellationToken.ThrowIfCancellationRequested();
+                            var isRequired = cfg.BatBuoc == ConfigConstants.BatBuoc;
+                            var target = $"{rowLabel} / {cfg.TruongThongTin}";
+
+                            // Không có cột: lỗi nếu bắt buộc, ngược lại bỏ qua
+                            if (!vanBanColumns.TryGetValue(cfg.TruongThongTin, out var col))
+                            {
+                                if (isRequired)
+                                {
+                                    errorCount++;
+                                    yield return new CheckProgressDto
+                                    {
+                                        Stage = (int)CheckStage.ExcelContent,
+                                        StageName = CheckConstants.StageNameExcelContent,
+                                        TargetType = CheckConstants.TargetTypeField,
+                                        Target = target,
+                                        Status = StatusCodeE.Error,
+                                        Code = ErrorCodes.ColumnMissing,
+                                        Message = $"File '{rowLabel}' trong sheet '{CheckConstants.SheetVanBan}' đang thiếu cột '{cfg.TruongThongTin}'."
+                                    };
+                                }
+                                continue;
+                            }
+
+                            var value = row.Cell(col).GetString().Trim();
+
+                            // Trống: lỗi nếu bắt buộc, ngược lại bỏ qua
+                            if (string.IsNullOrWhiteSpace(value))
+                            {
+                                if (isRequired)
+                                {
+                                    errorCount++;
+                                    yield return new CheckProgressDto
+                                    {
+                                        Stage = (int)CheckStage.ExcelContent,
+                                        StageName = CheckConstants.StageNameExcelContent,
+                                        TargetType = CheckConstants.TargetTypeField,
+                                        Target = target,
+                                        Status = StatusCodeE.Error,
+                                        Code = ErrorCodes.RequiredFieldEmpty,
+                                        Message = $"File '{rowLabel}' trong sheet '{CheckConstants.SheetVanBan}' đang thiếu cột '{cfg.TruongThongTin}'."
+                                    };
+                                }
+                                continue;
+                            }
+
+                            // Có dữ liệu (kể cả trường không bắt buộc): đối chiếu nội dung với mô tả.
+                            var options = (cfg.MoTa ?? string.Empty).Split('\n')
+                                .Select(line => Regex.Match(line.Trim(), OptionPattern))
+                                .Where(m => m.Success)
+                                .ToList();
+                            var isEnum = options.Count >= 2;
+
+                            if (isEnum)
+                            {
+                                var allowed = new HashSet<string>(
+                                    options.SelectMany(m => new[]
+                                    {
+                                        m.Groups[1].Value.Trim(),
+                                        m.Groups[2].Value.Trim(),
+                                        m.Groups[1].Value.Trim() + ":" + m.Groups[2].Value.Trim()
+                                    })
+                                    .Select(x => string.Join(' ', x.ToLowerInvariant().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).Replace(": ", ":").Replace(" :", ":")),
+                                    StringComparer.Ordinal);
+
+                                var normalizedValue = string.Join(' ', value.ToLowerInvariant().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).Replace(": ", ":").Replace(" :", ":");
+
+                                if (!allowed.Contains(normalizedValue))
+                                {
+                                    errorCount++;
+                                    yield return new CheckProgressDto
+                                    {
+                                        Stage = (int)CheckStage.ExcelContent,
+                                        StageName = CheckConstants.StageNameExcelContent,
+                                        TargetType = CheckConstants.TargetTypeField,
+                                        Target = target,
+                                        Status = StatusCodeE.Error,
+                                        Code = ErrorCodes.FieldContentInvalid,
+                                        Message = $"File '{rowLabel}' trong sheet '{CheckConstants.SheetVanBan}': trường '{cfg.TruongThongTin}' có giá trị '{value}' không hợp lệ theo mô tả."
+                                    };
+                                    continue;
+                                }
+                            }
+
+                            yield return new CheckProgressDto
+                            {
+                                Stage = (int)CheckStage.ExcelContent,
+                                StageName = CheckConstants.StageNameExcelContent,
+                                TargetType = CheckConstants.TargetTypeField,
+                                Target = target,
+                                Status = StatusCodeE.Success,
+                                Code = 200,
+                                Message = $"Trường '{cfg.TruongThongTin}' hợp lệ."
+                            };
+                        }
+                    }
+                }
+
+                // Tổng kết giai đoạn 3
+                yield return new CheckProgressDto
+                {
+                    Stage = (int)CheckStage.ExcelContent,
+                    StageName = CheckConstants.StageNameExcelContent,
+                    TargetType = CheckConstants.TargetTypeSummary,
+                    Target = CheckConstants.StageNameExcelContent,
+                    Status = errorCount == 0 ? StatusCodeE.Success : StatusCodeE.Error,
+                    Code = errorCount == 0 ? 200 : ErrorCodes.CheckHasErrors,
+                    Message = errorCount == 0 ? "Nội dung file Excel chính xác." : "Nội dung file Excel có lỗi, xem chi tiết."
+                };
+            }
+
+            // ========================= TỔNG KẾT =========================
+            yield return new CheckProgressDto
+            {
+                Stage = (int)CheckStage.ExcelContent,
+                StageName = "Hoàn tất kiểm tra",
+                TargetType = CheckConstants.TargetTypeSummary,
+                Target = "result",
+                Status = errorCount == 0 ? StatusCodeE.Success : StatusCodeE.Error,
+                Code = errorCount == 0 ? 200 : ErrorCodes.CheckHasErrors,
+                Message = errorCount == 0
+                    ? "Đủ điều kiện để đóng gói SIP theo chuẩn thông tư TT05."
+                    : "Không đủ điều kiện để đóng gói SIP theo chuẩn thông tư TT05.",
+                Completed = true
+            };
+        }
+    }
+}

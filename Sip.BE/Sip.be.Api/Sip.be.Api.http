@@ -1,0 +1,6 @@
+@Sip.be.Api_HostAddress = http://localhost:5145
+
+GET {{Sip.be.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

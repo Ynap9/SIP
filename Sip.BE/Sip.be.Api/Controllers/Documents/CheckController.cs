@@ -1,0 +1,47 @@
+﻿using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.Mvc;
+using Sip.be.Api.Base;
+using Sip.be.Application.Document.Dtos.Check;
+using Sip.be.Application.Document.Interfaces;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+
+namespace Sip.be.Api.Controllers.Documents
+{
+    [Route("api/core/document/check")]
+    [ApiController]
+    public class CheckController: BaseController
+    {
+        private readonly ICheckService _checkService;
+        public CheckController(ICheckService checkService, ILogger<CheckController> logger) : base(logger)
+        {
+            _checkService = checkService;
+        }
+
+        // Stream realtime qua SSE (text/event-stream). Mỗi bước check (kể cả từng file) đẩy 1 event
+        // CheckProgressDto để FE tick xanh ngay khi có kết quả.
+        [HttpPost("ho-so-folder")]
+        public async Task CheckHoSoFolder(CheckHoSoFolderRequestDto input)
+        {
+            Response.Headers.ContentType = "text/event-stream";
+            Response.Headers.CacheControl = "no-cache";
+            Response.Headers.Connection = "keep-alive";
+
+            // Tắt buffering để đẩy từng event ngay khi có (realtime)
+            HttpContext.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering();
+
+            var jsonOptions = new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+            };
+
+            await foreach (var progress in _checkService.CheckHoSoFolderAsync(input, HttpContext.RequestAborted))
+            {
+                var json = JsonSerializer.Serialize(progress, jsonOptions);
+                await Response.WriteAsync($"data: {json}\n\n", HttpContext.RequestAborted);
+                await Response.Body.FlushAsync(HttpContext.RequestAborted);
+            }
+        }
+    }
+}

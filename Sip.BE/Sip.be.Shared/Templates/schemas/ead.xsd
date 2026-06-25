@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           elementFormDefault="qualified"
+           attributeFormDefault="unqualified">
+
+    <xs:complexType name="elementContainer">
+        <xs:all>
+            <xs:element type="xs:string" name="fileCode"/>
+            <xs:element type="xs:string" name="title"/>
+            <xs:element type="xs:string" name="maintenance"/>
+            <xs:element type="xs:string" name="mode"/>
+            <xs:element type="xs:string" name="language"/>
+            <xs:element type="xs:string" name="startDate"/>
+            <xs:element type="xs:string" name="endDate"/>
+            <xs:element type="xs:string" name="keyword"/>
+            <xs:element type="xs:string" name="totalDoc"/>
+            <xs:element type="xs:string" name="numberOfPaper"/>
+            <xs:element type="xs:string" name="numberOfPage"/>
+            <xs:element type="xs:string" name="format"/>
+            <xs:element type="xs:string" name="inforSign"/>
+            <xs:element type="xs:string" name="confidenceLevel"/>
+            <xs:element type="xs:string" name="paperFileCode"/>
+            <xs:element type="xs:string" name="riskRecovery"/>
+            <xs:element type="xs:string" name="riskRecoveryStatus"/>
+            <xs:element type="xs:string" name="description"/>
+        </xs:all>
+    </xs:complexType>
+
+    <xs:element name="simpledc" type="elementContainer"/>
+
+</xs:schema>

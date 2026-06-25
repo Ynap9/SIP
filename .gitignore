@@ -1,0 +1,19 @@
+# ===== Thư mục gốc Sip =====
+
+# Output đóng gói desktop (build-desktop.ps1 xuất ra đây)
+/publish/
+
+# Output installer (Inno Setup)
+/Sip.BE/installer/installer-output/
+
+# SQLite local
+*.db
+*.db-shm
+*.db-wal
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vs/
+.idea/
+.vscode/

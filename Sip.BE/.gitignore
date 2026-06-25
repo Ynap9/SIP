@@ -1,0 +1,45 @@
+## ===== .NET / Visual Studio =====
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+build/
+bld/
+[Oo]ut/
+publish/
+*.user
+*.suo
+*.userprefs
+.vs/
+
+## Build results / artifacts
+*.dll
+*.pdb
+*.cache
+project.lock.json
+
+## NuGet
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+!**/packages/build/
+
+## SQLite (DB local & seed - KHÔNG commit)
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+
+## Logs
+logs/
+*.log
+
+## IDE
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
