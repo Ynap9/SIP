@@ -6,6 +6,9 @@
 # Output installer (Inno Setup)
 /Sip.BE/installer/installer-output/
 
+# Artifact đóng gói release
+*.zip
+
 # SQLite local
 *.db
 *.db-shm
