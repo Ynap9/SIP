@@ -32,6 +32,15 @@ namespace Sip.be.Shared.Request.ErrorRequest
             { ErrorCodes.RequiredFieldEmpty, "Trường bắt buộc đang để trống" },
             { ErrorCodes.FieldContentInvalid, "Nội dung trường không đúng với quy định trong mô tả" },
             { ErrorCodes.CheckHasErrors, "Quá trình kiểm tra phát hiện lỗi" },
+
+            { ErrorCodes.ParentFolderNotFound, "Không tìm thấy thư mục cha" },
+            { ErrorCodes.NoHoSoInParent, "Thư mục cha không chứa hồ sơ con nào" },
+            { ErrorCodes.DuplicateHoSoFolder, "Tên thư mục hồ sơ bị trùng lặp" },
+            { ErrorCodes.DuplicateFileName, "Tên file bị trùng lặp" },
+            { ErrorCodes.DuplicateHoSoCode, "Mã hồ sơ bị trùng lặp giữa các hồ sơ" },
+
+            { ErrorCodes.UnpackSourceNotFound, "Không tìm thấy gói SIP nguồn" },
+            { ErrorCodes.UnpackInvalidPackage, "Không nhận diện được gói SIP hợp lệ" },
         };
 
         public static string GetMessage(int code)

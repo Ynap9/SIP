@@ -53,6 +53,7 @@ namespace Sip.be.Api
             builder.Services.AddScoped<IConfigService, ConfigService>();
             builder.Services.AddScoped<ICheckService, CheckService>();
             builder.Services.AddScoped<IPackService, PackService>();
+            builder.Services.AddScoped<IUnpackService, UnpackService>();
             #endregion
             #region mapper
             builder.Services.AddAutoMapper(cfg => { }, typeof(MappingProfile));

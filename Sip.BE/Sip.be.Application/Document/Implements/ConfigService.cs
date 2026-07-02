@@ -76,7 +76,7 @@ namespace Sip.be.Application.Document.Implements
             var entities = worksheet.RowsUsed().Skip(1)
                 .Select(row => new ConfigHoSo
                 {
-                    TruongThongTin = columnMap.TryGetValue(ColTruongThongTin, out var colTen) ? row.Cell(colTen).GetString().Trim() : string.Empty,
+                    TruongThongTin = EadFieldMapping.NormalizeHeader(columnMap.TryGetValue(ColTruongThongTin, out var colTen) ? row.Cell(colTen).GetString() : string.Empty),
                     MoTa = columnMap.TryGetValue(ColMoTa, out var colMoTa) ? row.Cell(colMoTa).GetString().Trim() : string.Empty,
                     BatBuoc = (columnMap.TryGetValue(ColBatBuoc, out var colBatBuoc)
                         ? row.Cell(colBatBuoc).GetString().Trim().ToLowerInvariant()
@@ -136,7 +136,7 @@ namespace Sip.be.Application.Document.Implements
             var entities = worksheet.RowsUsed().Skip(1)
                 .Select(row => new ConfigVanBan
                 {
-                    TruongThongTin = columnMap.TryGetValue(ColTruongThongTin, out var colTen) ? row.Cell(colTen).GetString().Trim() : string.Empty,
+                    TruongThongTin = EadFieldMapping.NormalizeHeader(columnMap.TryGetValue(ColTruongThongTin, out var colTen) ? row.Cell(colTen).GetString() : string.Empty),
                     MoTa = columnMap.TryGetValue(ColMoTa, out var colMoTa) ? row.Cell(colMoTa).GetString().Trim() : string.Empty,
                     BatBuoc = (columnMap.TryGetValue(ColBatBuoc, out var colBatBuoc)
                         ? row.Cell(colBatBuoc).GetString().Trim().ToLowerInvariant()

@@ -30,6 +30,7 @@ export class Menu {
   protected readonly navItems: NavItem[] = [
     { label: 'Trang chủ', link: '/', icon: 'pi pi-home' },
     { label: 'Kiểm tra & đóng gói', link: '/dong-goi', icon: 'pi pi-box' },
+    { label: 'Bóc tách dữ liệu', link: '/boc-tach', icon: 'pi pi-sitemap' },
     { label: 'Cấu hình', link: '/cau-hinh', icon: 'pi pi-cog' }
   ];
 }

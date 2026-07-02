@@ -1,0 +1,100 @@
+<div class="flex flex-col gap-4">
+  <app-breadcrumb [home]="home" [items]="breadcrumbItems" />
+
+  <!-- 1. Khu vực đưa gói zip vào -->
+  <div
+    class="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed py-12 transition-colors"
+    [ngClass]="isDragOver() ? 'border-indigo-500 bg-indigo-50' : 'border-slate-300 bg-slate-50'"
+    (dragover)="onDragOver($event)"
+    (dragleave)="onDragLeave($event)"
+    (drop)="onDrop($event)"
+  >
+    <i class="pi pi-file-import text-3xl text-slate-400"></i>
+    <p class="font-medium text-slate-600">Hãy đưa file ZIP (hoặc thư mục gói) cần bóc tách vào đây!</p>
+    @if (sourcePath()) {
+      <p class="text-sm text-indigo-600 break-all px-4 text-center">{{ sourcePath() }}</p>
+    }
+  </div>
+
+  @if (!desktop.isDesktop) {
+    <!-- TEMP: dán đường dẫn nguồn để test web-dev (REMOVE on desktop build) -->
+    <div class="flex items-center gap-2">
+      <label class="font-medium whitespace-nowrap">Nguồn (TEMP):</label>
+      <input
+        pInputText
+        class="flex-1"
+        placeholder="Dán đường dẫn tới file .zip hoặc thư mục gói"
+        [ngModel]="sourcePath()"
+        (ngModelChange)="sourcePath.set($event)"
+      />
+    </div>
+  }
+
+  <!-- 2. Thư mục xuất ra -->
+  <div class="flex items-center gap-2">
+    <label class="font-medium whitespace-nowrap">Thư mục xuất ra:</label>
+    <input
+      pInputText
+      class="flex-1"
+      placeholder="Chọn/dán thư mục xuất kết quả"
+      [ngModel]="outputPath()"
+      (ngModelChange)="outputPath.set($event)"
+      [readonly]="desktop.isDesktop"
+    />
+    @if (desktop.isDesktop) {
+      <p-button icon="pi pi-folder-open" severity="secondary" [outlined]="true" (onClick)="chooseOutput()" />
+    }
+  </div>
+
+  <!-- 3. Tiến trình (giữa ô thư mục xuất và nút bóc tách) -->
+  @if (isLoading()) {
+    <p-progressbar mode="indeterminate" [style]="{ height: '6px' }" />
+  }
+
+  <!-- 4. Kết quả: đường dẫn folder cha + cây library -->
+  @if (result(); as r) {
+    <div class="flex flex-col gap-3 rounded-lg border border-slate-200 p-4">
+      <div class="flex items-center gap-2 text-green-600">
+        <i class="pi pi-check-circle text-xl"></i>
+        <span class="font-medium">Đã bóc tách hồ sơ '{{ r.hoSoName }}' ({{ r.totalDoc }} tài liệu).</span>
+      </div>
+
+      <!-- Đường dẫn thư mục hồ sơ (folder cha) + nút Mở -->
+      <div class="flex items-center gap-2">
+        <label class="font-medium whitespace-nowrap">Thư mục hồ sơ:</label>
+        <input pInputText class="flex-1 bg-slate-50 text-slate-600" [value]="r.folderPath" readonly />
+        <p-button label="Mở" icon="pi pi-external-link" severity="secondary" [outlined]="true" (onClick)="openNode(r.folderPath)" />
+      </div>
+
+      <!-- Cây thư mục kiểu library (click tên folder = xổ/thu; click file = mở) -->
+      <p-tree
+        [value]="treeNodes()"
+        selectionMode="single"
+        (onNodeSelect)="onNodeSelect($event.node)"
+        [style]="{ width: '100%' }"
+      />
+
+      @if (r.warnings.length) {
+        <div class="rounded border border-amber-200 bg-amber-50 p-2 text-sm text-amber-700">
+          <div class="mb-1 font-medium">Cảnh báo:</div>
+          <ul class="list-disc pl-5">
+            @for (w of r.warnings; track w) {
+              <li>{{ w }}</li>
+            }
+          </ul>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- 5. Nút bóc tách: đẩy xuống dưới cùng (sau progress + kết quả) -->
+  <div class="flex items-center justify-end">
+    <p-button
+      label="Bóc tách"
+      icon="pi pi-file-import"
+      [disabled]="!canUnpack()"
+      [loading]="isLoading()"
+      (onClick)="onUnpack()"
+    />
+  </div>
+</div>

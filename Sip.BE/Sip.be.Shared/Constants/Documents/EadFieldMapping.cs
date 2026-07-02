@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
+using System.Text.RegularExpressions;
 
 namespace Sip.be.Shared.Constants.Documents
 {
@@ -71,6 +73,19 @@ namespace Sip.be.Shared.Constants.Documents
             if (string.IsNullOrWhiteSpace(value)) return string.Empty;
             var idx = value.IndexOf(':');
             return (idx > 0 ? value.Substring(0, idx) : value).Trim();
+        }
+
+        /// <summary>
+        /// Chuẩn hoá 1 header/tên trường về dạng canonical để so khớp key ổn định:
+        /// NFC (tiền tổ hợp) + đổi non-breaking space (U+00A0) thành space thường + gộp khoảng trắng + trim.
+        /// Áp dụng tại MỌI ranh giới nạp header từ nguồn ngoài (Excel/DB) để tránh lệch Unicode (NFC/NFD, NBSP)
+        /// khiến lookup ordinal thất bại. Các key trong map này vốn đã NFC nên không đổi.
+        /// </summary>
+        public static string NormalizeHeader(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+            var normalized = value.Normalize(NormalizationForm.FormC);
+            return Regex.Replace(normalized, @"\s+", " ").Trim();
         }
     }
 }

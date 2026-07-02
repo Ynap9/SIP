@@ -14,5 +14,14 @@ namespace Sip.be.Application.Document.Interfaces
         /// Mỗi bước check xong sẽ yield 1 CheckProgressDto (đúng hoặc lỗi) để FE tick realtime.
         /// </summary>
         IAsyncEnumerable<CheckProgressDto> CheckHoSoFolderAsync(CheckHoSoFolderRequestDto input, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Kiểm tra NHIỀU hồ sơ trong 1 thư mục CHA, stream tiến trình theo từng hồ sơ (cho SSE).
+        /// Phase 1 (tuần tự): kiểm tra cấu trúc thư mục cha + trùng lặp (tên thư mục hồ sơ, tên file);
+        /// lỗi cấp cha thì dừng ngay, hồ sơ con lỗi cấu trúc thì đánh dấu lỗi và vẫn tiếp tục.
+        /// Phase 2 (song song, giới hạn luồng): kiểm tra nội dung từng hồ sơ hợp lệ + phát hiện trùng mã hồ sơ.
+        /// Mỗi hồ sơ xử lý xong yield 1 MultiCheckProgressDto; event cuối là tổng kết toàn batch.
+        /// </summary>
+        IAsyncEnumerable<MultiCheckProgressDto> CheckMultiFolderAsync(CheckMultiFolderRequestDto input, CancellationToken cancellationToken = default);
     }
 }

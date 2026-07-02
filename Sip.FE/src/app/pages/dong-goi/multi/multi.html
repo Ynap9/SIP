@@ -1,0 +1,176 @@
+<div class="flex flex-col gap-4">
+  <!-- 1. Khu vực đưa thư mục CHA vào -->
+  <div
+    class="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed py-12 transition-colors"
+    [ngClass]="isDragOver() ? 'border-indigo-500 bg-indigo-50' : 'border-slate-300 bg-slate-50'"
+    (dragover)="onDragOver($event)"
+    (dragleave)="onDragLeave($event)"
+    (drop)="onDrop($event)"
+  >
+    <i class="pi pi-folder-open text-3xl text-slate-400"></i>
+    <p class="font-medium text-slate-600">Hãy đưa thư mục CHA (chứa nhiều hồ sơ) cần kiểm tra vào đây!</p>
+    @if (folderPath()) {
+      <p class="text-sm text-indigo-600 break-all px-4 text-center">{{ folderPath() }}</p>
+    }
+    @if (desktop.isDesktop) {
+      <p-button label="Chọn thư mục" icon="pi pi-folder-open" severity="secondary" [outlined]="true" (onClick)="chooseFolder()" />
+    }
+  </div>
+
+  @if (!desktop.isDesktop) {
+    <!-- TEMP: dán đường dẫn tuyệt đối để test trên web-dev (REMOVE on desktop build) -->
+    <div class="flex items-center gap-2">
+      <label class="font-medium whitespace-nowrap">Đường dẫn (TEMP):</label>
+      <input
+        pInputText
+        class="flex-1"
+        placeholder="Dán đường dẫn tuyệt đối tới thư mục cha"
+        [ngModel]="folderPath()"
+        (ngModelChange)="folderPath.set($event)"
+      />
+    </div>
+  }
+
+  <!-- 2. Tiến trình + bảng 2 cấp -->
+  @if (running() || completed()) {
+    <p-progressbar [value]="percent()" />
+  }
+
+  @if (hoSoRows().length) {
+    <div class="overflow-x-auto rounded-lg border border-slate-200">
+      <table class="grid-table" style="min-width: 50rem">
+        <thead>
+          <tr>
+            <th style="width: 3rem"></th>
+            <th style="width: 4rem">STT</th>
+            <th>Tên hồ sơ</th>
+            <th style="width: 9rem">Trạng thái</th>
+            <th style="width: 9rem">Tình trạng</th>
+            <th>Nguyên nhân lỗi</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of hoSoRows(); track row.name; let i = $index) {
+            <!-- Dòng hồ sơ -->
+            <tr>
+              <!-- Nút mũi tên trong vòng tròn nhỏ -> xổ/thu bảng con file -->
+              <td>
+                <button
+                  type="button"
+                  class="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-300 text-slate-600 hover:bg-slate-100"
+                  (click)="toggleRow(row.name)"
+                  aria-label="Xem file"
+                >
+                  <i class="pi text-xs" [ngClass]="isExpanded(row.name) ? 'pi-chevron-up' : 'pi-chevron-down'"></i>
+                </button>
+              </td>
+              <td>{{ i + 1 }}</td>
+              <td class="break-all font-medium">{{ row.name }}</td>
+
+              <!-- Trạng thái: đã xử lý xong chưa (xong = tích xanh) -->
+              <td>
+                @switch (row.status) {
+                  @case ('processing') { <i class="pi pi-spin pi-spinner text-slate-500"></i> }
+                  @default { <i class="pi pi-check-circle text-green-600"></i> }
+                }
+              </td>
+
+              <!-- Tình trạng: đạt / lỗi -->
+              <td>
+                @switch (row.status) {
+                  @case ('ok') {
+                    <span class="inline-flex h-5 w-5 items-center justify-center rounded border-2 border-green-500 bg-green-500 text-white">
+                      <i class="pi pi-check" style="font-size: 0.7rem"></i>
+                    </span>
+                  }
+                  @case ('error') {
+                    <span class="inline-flex h-5 w-5 items-center justify-center rounded border-2 border-red-500 bg-red-500 text-white">
+                      <i class="pi pi-times" style="font-size: 0.7rem"></i>
+                    </span>
+                  }
+                  @default { <span class="text-slate-300">—</span> }
+                }
+              </td>
+
+              <td class="text-red-600">{{ row.reason }}</td>
+            </tr>
+
+            <!-- Dòng mở rộng: bảng con các file trong hồ sơ -->
+            @if (isExpanded(row.name)) {
+              <tr>
+                <td colspan="6" style="padding: 0" class="bg-slate-50">
+                  @if (row.files.length) {
+                    <table class="grid-table child">
+                      <thead>
+                        <tr>
+                          <th style="width: 4rem">STT</th>
+                          <th>Tên file</th>
+                          <th style="width: 9rem">Trạng thái</th>
+                          <th style="width: 9rem">Tình trạng</th>
+                          <th>Nguyên nhân lỗi</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (f of row.files; track f.name; let j = $index) {
+                          <tr>
+                            <td>{{ j + 1 }}</td>
+                            <td class="break-all">{{ f.name }}</td>
+                            <td>
+                              @switch (f.status) {
+                                @case ('processing') { <i class="pi pi-spin pi-spinner text-slate-500"></i> }
+                                @default { <i class="pi pi-check-circle text-green-600"></i> }
+                              }
+                            </td>
+                            <td>
+                              @switch (f.status) {
+                                @case ('ok') {
+                                  <span class="inline-flex h-5 w-5 items-center justify-center rounded border-2 border-green-500 bg-green-500 text-white">
+                                    <i class="pi pi-check" style="font-size: 0.7rem"></i>
+                                  </span>
+                                }
+                                @case ('error') {
+                                  <span class="inline-flex h-5 w-5 items-center justify-center rounded border-2 border-red-500 bg-red-500 text-white">
+                                    <i class="pi pi-times" style="font-size: 0.7rem"></i>
+                                  </span>
+                                }
+                                @default { <span class="text-slate-300">—</span> }
+                              }
+                            </td>
+                            <td class="text-red-600">{{ f.reason }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  } @else {
+                    <div class="p-3 text-center text-sm text-slate-500">Không có file để hiển thị.</div>
+                  }
+                </td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  <!-- 3. Nút: canh phải, dưới cùng -->
+  <div class="flex items-center justify-end gap-2">
+    <p-button
+      label="Kiểm tra"
+      icon="pi pi-search"
+      [disabled]="!canCheck()"
+      [loading]="running()"
+      (onClick)="startCheck()"
+    />
+    @if (completed()) {
+      <p-button label="Đóng gói" icon="pi pi-box" severity="success" (onClick)="onPackage()" />
+    }
+  </div>
+
+  <!-- Popup đóng gói nhiều hồ sơ -->
+  <app-package-multi-dialog
+    [parentFolderPath]="folderPath()"
+    [passedHoSoNames]="passedHoSoNames()"
+    [(visible)]="showPackageDialog"
+  />
+</div>

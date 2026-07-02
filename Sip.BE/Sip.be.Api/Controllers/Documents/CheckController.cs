@@ -43,5 +43,31 @@ namespace Sip.be.Api.Controllers.Documents
                 await Response.Body.FlushAsync(HttpContext.RequestAborted);
             }
         }
+
+        // Kiểm tra NHIỀU hồ sơ trong 1 thư mục cha, stream realtime qua SSE. Mỗi hồ sơ xử lý xong
+        // (hoặc lỗi cấu trúc/trùng lặp) đẩy 1 MultiCheckProgressDto; event cuối là tổng kết toàn batch.
+        [HttpPost("multi-folder")]
+        public async Task CheckMultiFolder(CheckMultiFolderRequestDto input)
+        {
+            Response.Headers.ContentType = "text/event-stream";
+            Response.Headers.CacheControl = "no-cache";
+            Response.Headers.Connection = "keep-alive";
+
+            // Tắt buffering để đẩy từng event ngay khi có (realtime)
+            HttpContext.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering();
+
+            var jsonOptions = new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+            };
+
+            await foreach (var progress in _checkService.CheckMultiFolderAsync(input, HttpContext.RequestAborted))
+            {
+                var json = JsonSerializer.Serialize(progress, jsonOptions);
+                await Response.WriteAsync($"data: {json}\n\n", HttpContext.RequestAborted);
+                await Response.Body.FlushAsync(HttpContext.RequestAborted);
+            }
+        }
     }
 }

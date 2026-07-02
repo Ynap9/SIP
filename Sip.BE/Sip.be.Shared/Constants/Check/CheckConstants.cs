@@ -28,10 +28,21 @@ namespace Sip.be.Shared.Constants.Check
         public const string TargetTypeCode = "code";
         public const string TargetTypeSummary = "summary";
 
+        // Loại đối tượng cho luồng kiểm tra NHIỀU hồ sơ
+        public const string TargetTypeParent = "parent";     // event ở cấp thư mục cha
+        public const string TargetTypeHoSo = "hoso";         // event ở cấp 1 hồ sơ
+        public const string TargetTypeDuplicate = "duplicate"; // event báo trùng lặp (mã hồ sơ...)
+        public const string TargetTypeManifest = "manifest"; // event liệt kê sẵn danh sách hồ sơ con
+
         // Tên các giai đoạn (stage) để hiển thị
         public const string StageNameFolderStructure = "Kiểm tra cấu trúc thư mục";
         public const string StageNameCodeMatching = "Kiểm tra khớp mã hồ sơ và mã định danh tài liệu";
         public const string StageNameExcelContent = "Kiểm tra nội dung file Excel";
+
+        // Tên các giai đoạn cho luồng kiểm tra NHIỀU hồ sơ
+        public const string StageNameStructureValidation = "Kiểm tra cấu trúc thư mục và trùng lặp";
+        public const string StageNameProcessing = "Kiểm tra nội dung các hồ sơ";
+        public const string StageNameMultiSummary = "Hoàn tất kiểm tra nhiều hồ sơ";
 
         // Đuôi file Excel hợp lệ trong thư mục metadata
         public static readonly HashSet<string> ExcelExtensions =

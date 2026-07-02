@@ -33,5 +33,16 @@ namespace Sip.be.Shared.Request.ErrorRequest
         public const int RequiredFieldEmpty = 1014;
         public const int FieldContentInvalid = 1015;
         public const int CheckHasErrors = 1016;
+
+        //Các mã lỗi cho luồng kiểm tra NHIỀU hồ sơ (multi)
+        public const int ParentFolderNotFound = 1017;
+        public const int NoHoSoInParent = 1018;
+        public const int DuplicateHoSoFolder = 1019;
+        public const int DuplicateFileName = 1020;
+        public const int DuplicateHoSoCode = 1021;
+
+        //Các mã lỗi cho luồng dịch ngược (unpack) gói SIP
+        public const int UnpackSourceNotFound = 1022;
+        public const int UnpackInvalidPackage = 1023;
     }
 }

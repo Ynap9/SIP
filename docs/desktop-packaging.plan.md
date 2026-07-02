@@ -1,36 +1,61 @@
-# Đóng gói Desktop — Hướng C (.NET host WebView2 / Photino) — Build Plan
+# Desktop packaging — Approach C (.NET host + WebView2 / Photino) — Build Plan
 
-> Mục tiêu: 1 app cài đặt Windows (.exe/.msi) "SIPPACK", mở nhanh, nhẹ, UI giữ nguyên (Angular + PrimeNG). KHÔNG dùng Electron/Node. Người dùng chỉ chạy 1 installer.
+> Goal: a single Windows installer app ("SIPPACK"), fast to open, lightweight, UI unchanged (Angular + PrimeNG).
+> NO Electron/Node. The user runs a single installer.
 
-## Kiến trúc chốt
-- **1 tiến trình .NET duy nhất** (project mới `Sip.Desktop`):
-  1. Khởi động Kestrel (chính là `Sip.be.Api` hiện có) trên cổng local.
-  2. Kestrel vừa phục vụ **API** vừa **serve Angular static** (`UseDefaultFiles` + `UseStaticFiles` + `MapFallbackToFile("index.html")`).
-  3. Mở **PhotinoWindow** trỏ tới `http://127.0.0.1:<port>/` (WebView2). Đóng cửa sổ → tắt host.
-- FE + API **same-origin** → bỏ cross-process, không spawn 2 tiến trình, mở app nhanh nhất.
+## Chosen architecture
+- **A single .NET process** (new project `Sip.Desktop`):
+  1. Starts Kestrel (the existing `Sip.be.Api`) on a local port.
+  2. Kestrel serves both the **API** and the **Angular static files** (`UseDefaultFiles` + `UseStaticFiles`
+     + `MapFallbackToFile("index.html")`).
+  3. Opens a **PhotinoWindow** (WebView2) pointing at `http://127.0.0.1:<port>/`. Closing the window shuts down the host.
+- FE + API are **same-origin** → no cross-process calls, no second process, fastest startup.
 
 ## Decisions
-- **D1 — Host = Photino.NET** (WebView2 sẵn trên Win10/11). Fallback nếu vướng: WinForms + control `WebView2`. Lý do: nhẹ, cross-webview, JS-bridge có sẵn.
-- **D2 — Native dialog qua CẦU NỐI Photino (web message), KHÔNG cần endpoint API/COM.** FE gửi `pickFolder` / `openPath:<path>` qua `window.external.sendMessage`; host xử lý: `pickFolder` → `PhotinoWindow.ShowOpenFolder(...)` (dialog native sẵn có) rồi `SendWebMessage("folder:<path>")`; `openPath` → `Process.Start("explorer.exe", path)`. Lý do: Photino có sẵn dialog native, tránh COM/WinForms trong BE; FE fallback web-dev (clipboard) khi không có bridge.
-- **D3 — `environment.baseUrl=''` (same-origin) cho bản desktop.** Thêm `environment.desktop.ts` (baseUrl rỗng + cờ `desktop=true`) + cấu hình build `production-desktop`. Lý do: FE gọi thẳng Kestrel host.
-- **D4 — SQLite ở `%AppData%/SipPack/sip.db`** (không để trong thư mục cài, tránh quyền ghi). Set connection string lúc runtime; tạo thư mục nếu chưa có; chạy `Database.Migrate()` khi khởi động.
-- **D5 — Publish self-contained win-x64**; installer Inno Setup (hoặc WiX/MSIX) + icon + tên "SIPPACK"; nhúng WebView2 bootstrapper (tự cài nếu máy thiếu).
+- **D1 — Host = Photino.NET** (WebView2 ships with Win10/11). Fallback if blocked: WinForms + `WebView2` control.
+  Rationale: lightweight, cross-webview, built-in JS bridge.
+- **D2 — Native dialogs via the Photino BRIDGE (web message), no API/COM endpoint needed.** FE sends
+  `pickFolder` / `openPath:<path>` through `window.external.sendMessage`; the host handles it: `pickFolder` →
+  `PhotinoWindow.ShowOpenFolder(...)` (built-in native dialog) then `SendWebMessage("folder:<path>")`; `openPath`
+  → `Process.Start("explorer.exe", path)`. Rationale: Photino already has native dialogs; avoids COM/WinForms in
+  the BE; FE falls back to web-dev (clipboard) when there is no bridge.
+- **D3 — `environment.baseUrl=''` (same-origin) for the desktop build.** Add `environment.desktop.ts` (empty
+  baseUrl + a `desktop=true` flag) plus a `production-desktop` build configuration. Rationale: FE calls the
+  Kestrel host directly.
+- **D4 — SQLite at `%AppData%/SipPack/sip.db`** (not inside the install dir, to avoid write-permission issues).
+  Set the connection string at runtime; create the folder if missing; run `Database.Migrate()` at startup.
+- **D5 — Publish self-contained win-x64**; installer via Inno Setup (or WiX/MSIX) + icon + name "SIPPACK";
+  embed the WebView2 bootstrapper (auto-install if the machine lacks it).
 
 ## Steps
-1. **FE desktop mode**: `environment.desktop.ts` (`baseUrl:''` same-origin) + cấu hình build `desktop` (fileReplacements) trong `angular.json`; `DesktopService` (cầu nối Photino: `isDesktop`, `pickFolder()`, `openPath()`, fallback web). `npm run build`.
-2. **FE thay điểm tạm**: nút "Chọn thư mục" (check + outputPath) gọi `DesktopService.pickFolder()`; `openFolder()` gọi `DesktopService.openPath()`; ẩn ô "path TEMP" khi `isDesktop`. `npm run build`.
-3. **BE serve SPA** (DONE): `Sip.be.Api` thêm `UseDefaultFiles/UseStaticFiles` + `MapFallbackToFile("index.html")`, bỏ https-redirect, `Migrate()` khi khởi động. FE `dist` copy vào `wwwroot` lúc publish.
-4. **BE refactor host**: tách logic build app trong `Program.cs` thành `public static WebApplication BuildApp(string[] args)` để `Sip.Desktop` tái dùng (Program.Main vẫn chạy như cũ). Connection string lấy từ config (host inject AppData). `dotnet build`.
-5. **BE SQLite AppData**: host đặt `ConnectionStrings:DefaultConnection = %AppData%/SipPack/sip.db` (auto-create thư mục); `Migrate()` đã có ở bước 3. `dotnet build`.
-6. **Project `Sip.Desktop`**: ref `Sip.be.Api` + Photino.NET; `Main()`: set AppData connection string → `BuildApp` → bind cổng trống → `StartAsync` (nền) → mở `PhotinoWindow` trỏ URL + handler `WebMessageReceived` (pickFolder/openPath) → `WaitForClose` → shutdown. `dotnet build`.
-7. **Publish + installer**: script `ng build --configuration desktop` (copy `dist` → `Sip.be.Api/wwwroot`) + `dotnet publish Sip.Desktop -c Release -r win-x64 --self-contained true` → Inno Setup `installer.iss` tạo `SIPPACK-Setup.exe` (icon, shortcut, nhúng WebView2 bootstrap). Chạy thử máy sạch.
+1. **FE desktop mode**: `environment.desktop.ts` (`baseUrl:''` same-origin) + a `desktop` build config
+   (fileReplacements) in `angular.json`; `DesktopService` (Photino bridge: `isDesktop`, `pickFolder()`,
+   `openPath()`, web fallback). `npm run build`.
+2. **FE replace the temporary bits**: the "Choose folder" button (check + outputPath) calls
+   `DesktopService.pickFolder()`; `openFolder()` calls `DesktopService.openPath()`; hide the "TEMP path" input
+   when `isDesktop`. `npm run build`.
+3. **BE serve SPA** (DONE): `Sip.be.Api` adds `UseDefaultFiles/UseStaticFiles` + `MapFallbackToFile("index.html")`,
+   removes https-redirect, `Migrate()` at startup. FE `dist` is copied into `wwwroot` on publish.
+4. **BE host refactor**: extract the app-building logic in `Program.cs` into
+   `public static WebApplication BuildApp(string[] args)` so `Sip.Desktop` can reuse it (Program.Main still runs
+   as before). Connection string comes from config (the host injects AppData). `dotnet build`.
+5. **BE SQLite AppData**: the host sets `ConnectionStrings:DefaultConnection = %AppData%/SipPack/sip.db`
+   (auto-create the folder); `Migrate()` already added in step 3. `dotnet build`.
+6. **Project `Sip.Desktop`**: reference `Sip.be.Api` + Photino.NET; `Main()`: set the AppData connection string →
+   `BuildApp` → bind a free port → `StartAsync` (background) → open `PhotinoWindow` at the URL + a
+   `WebMessageReceived` handler (pickFolder/openPath) → `WaitForClose` → shutdown. `dotnet build`.
+7. **Publish + installer**: script `ng build --configuration desktop` (copy `dist` → `Sip.be.Api/wwwroot`) +
+   `dotnet publish Sip.Desktop -c Release -r win-x64 --self-contained true` → Inno Setup `installer.iss`
+   produces `SIPPACK-Setup.exe` (icon, shortcut, embedded WebView2 bootstrap). Test on a clean machine.
 
 ## Expected output
-- New: `Sip.Desktop/` (host Photino), `DesktopController` + 2 endpoint, `Sip.FE/src/environments/environment.desktop.ts`, `DesktopService`, script publish + `installer.iss`.
-- Modified: `Sip.be.Api` (static SPA + fallback + tắt https-redirect + SQLite AppData), `check.ts/html` + `package-dialog` (dùng native pick/open, ẩn TEMP khi desktop).
-- Untouched: nghiệp vụ Check/Pack/Config, METS/EAD generator, DB schema.
+- New: `Sip.Desktop/` (Photino host), `DesktopController` + 2 endpoints,
+  `Sip.FE/src/environments/environment.desktop.ts`, `DesktopService`, publish script + `installer.iss`.
+- Modified: `Sip.be.Api` (static SPA + fallback + disable https-redirect + SQLite AppData), `check.ts/html` +
+  `package-dialog` (native pick/open, hide TEMP on desktop).
+- Untouched: the Check/Pack/Config business logic, the METS/EAD generator, the DB schema.
 
-## Cần bạn chốt (trước khi build)
-1. Tên app/installer & icon (mặc định "SIPPACK").
-2. Cổng: cố định `5145` hay tự tìm cổng trống (an toàn hơn nếu cổng bận).
-3. Có cần **single-instance** (chặn mở 2 cửa sổ) không.
+## To confirm (before building)
+1. App/installer name & icon (default "SIPPACK").
+2. Port: fixed `5145` or auto-pick a free port (safer if the port is busy).
+3. Whether **single-instance** (block opening two windows) is needed.

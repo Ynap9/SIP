@@ -17,6 +17,10 @@ export const routes: Routes = [
         path: 'dong-goi',
         loadChildren: () => import('./app/pages/dong-goi/dong-goi.router').then((m) => m.dongGoiRoutes)
       },
+      {
+        path: 'boc-tach',
+        loadChildren: () => import('./app/pages/boc-tach/boc-tach.router').then((m) => m.bocTachRoutes)
+      },
     ]
   }
 ];
