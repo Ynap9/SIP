@@ -1,19 +1,19 @@
 import { Component, inject, signal } from '@angular/core';
-import { MenuItem, TreeNode } from 'primeng/api';
+import { MenuItem } from 'primeng/api';
 import { ProgressBarModule } from 'primeng/progressbar';
-import { TreeModule } from 'primeng/tree';
 
 import { SharedImports } from '../../shared/import.shared';
 import { BaseComponent } from '../../shared/components/base/base-component';
 import { Breadcrumb } from '../../shared/components/breadcrumb/breadcrumb';
+import { FileTree } from '../../shared/components/file-tree/file-tree';
 import { Utils } from '../../shared/utils';
 import { UnpackService } from '../../services/unpack.service';
 import { DesktopService } from '../../services/desktop.service';
-import { IUnpackResult, IFileNode } from '../../models/unpack.models';
+import { IUnpackResult } from '../../models/unpack.models';
 
 @Component({
   selector: 'app-boc-tach',
-  imports: [...SharedImports, ProgressBarModule, TreeModule, Breadcrumb],
+  imports: [...SharedImports, ProgressBarModule, Breadcrumb, FileTree],
   templateUrl: './boc-tach.html',
   styleUrl: './boc-tach.scss'
 })
@@ -29,7 +29,6 @@ export class BocTach extends BaseComponent {
   isDragOver = signal<boolean>(false);
   isLoading = signal<boolean>(false);
   result = signal<IUnpackResult | null>(null);
-  treeNodes = signal<TreeNode[]>([]);
 
   // ===== Kéo-thả gói zip (desktop expose path tuyệt đối) =====
   onDragOver(event: DragEvent): void {
@@ -51,6 +50,14 @@ export class BocTach extends BaseComponent {
       this.sourcePath.set(Utils.normalizeFolderPath(path));
     } else {
       this.messageWarning('Không lấy được đường dẫn. Vui lòng dán vào ô bên dưới.');
+    }
+  }
+
+  // Chọn thư mục gói (đã giải nén) bằng dialog native; file .zip thì kéo-thả/dán.
+  async chooseSource(): Promise<void> {
+    const path = await this.desktop.pickFolder();
+    if (path) {
+      this.sourcePath.set(Utils.normalizeFolderPath(path));
     }
   }
 
@@ -80,14 +87,12 @@ export class BocTach extends BaseComponent {
 
     this.isLoading.set(true);
     this.result.set(null);
-    this.treeNodes.set([]);
 
     this.unpackService.unpack({ sourcePath, outputPath }).subscribe({
       next: (res) => {
         this.isLoading.set(false);
         if (this.isResponseSucceed(res)) {
           this.result.set(res.data);
-          this.treeNodes.set(res.data.tree ? [this.toTreeNode(res.data.tree)] : []);
         }
       },
       error: () => {
@@ -95,28 +100,6 @@ export class BocTach extends BaseComponent {
         this.messageError('Bóc tách thất bại. Vui lòng thử lại.');
       }
     });
-  }
-
-  private toTreeNode(node: IFileNode): TreeNode {
-    const isFolder = node.type === 'folder';
-    return {
-      label: node.name,
-      data: node.path,
-      icon: isFolder ? 'pi pi-folder' : 'pi pi-file',
-      expanded: isFolder,
-      leaf: !isFolder,
-      children: node.children?.map((c) => this.toTreeNode(c))
-    };
-  }
-
-  // Click tên folder -> xổ/thu cây; click tên file -> mở file bằng trình xem mặc định.
-  onNodeSelect(node: TreeNode): void {
-    if (node.leaf) {
-      this.openNode(node.data as string);
-    } else {
-      node.expanded = !node.expanded;
-      this.treeNodes.set([...this.treeNodes()]); // đổi tham chiếu để p-tree render lại theo expanded mới
-    }
   }
 
   // Mở thư mục/file: desktop -> Explorer / app mặc định; web-dev -> copy clipboard.

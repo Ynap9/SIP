@@ -14,6 +14,9 @@
     @if (sourcePath()) {
       <p class="text-sm text-indigo-600 break-all px-4 text-center">{{ sourcePath() }}</p>
     }
+    @if (desktop.isDesktop) {
+      <p-button label="Chọn thư mục" icon="pi pi-folder-open" severity="secondary" [outlined]="true" (onClick)="chooseSource()" />
+    }
   </div>
 
   @if (!desktop.isDesktop) {
@@ -67,12 +70,7 @@
       </div>
 
       <!-- Cây thư mục kiểu library (click tên folder = xổ/thu; click file = mở) -->
-      <p-tree
-        [value]="treeNodes()"
-        selectionMode="single"
-        (onNodeSelect)="onNodeSelect($event.node)"
-        [style]="{ width: '100%' }"
-      />
+      <app-file-tree [nodes]="r.tree ? [r.tree] : []" (open)="openNode($event)" />
 
       @if (r.warnings.length) {
         <div class="rounded border border-amber-200 bg-amber-50 p-2 text-sm text-amber-700">

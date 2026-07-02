@@ -1,0 +1,26 @@
+<ul class="file-tree">
+  <ng-container *ngTemplateOutlet="branch; context: { $implicit: nodes() }"></ng-container>
+</ul>
+
+<ng-template #branch let-list>
+  @for (node of list; track node.path) {
+    <li>
+      <div class="node" (click)="onClickNode(node)">
+        @if (isFolder(node)) {
+          <i class="pi w-3.5 text-[0.7rem]" [ngClass]="isExpanded(node) ? 'pi-chevron-down' : 'pi-chevron-right'"></i>
+          <i class="pi pi-folder text-amber-500"></i>
+        } @else {
+          <span class="inline-block w-3.5"></span>
+          <i class="pi pi-file text-slate-400"></i>
+        }
+        <span class="break-all">{{ node.name }}</span>
+      </div>
+
+      @if (isFolder(node) && isExpanded(node) && node.children?.length) {
+        <ul class="children">
+          <ng-container *ngTemplateOutlet="branch; context: { $implicit: node.children }"></ng-container>
+        </ul>
+      }
+    </li>
+  }
+</ng-template>
