@@ -844,6 +844,20 @@ namespace Sip.be.Application.Document.Implements
                 yield break;
             }
 
+            // === NHẬN DIỆN CẤU TRÚC: có file Excel dùng CHUNG ở thư mục cha -> loại 2/3 (metadata chung) ===
+            // Loại 3: thư mục cha có folder 'metadata' chứa Excel; Loại 2: có file Excel đặt trực tiếp ở thư mục cha.
+            // Khi đó mỗi hồ sơ con chứa file data TRỰC TIẾP (không có metadata/attachment) -> xử lý bằng nhánh riêng.
+            // Không có Excel chung -> giữ nguyên loại 1 (mỗi hồ sơ con có metadata/ + attachment/) ở phần dưới.
+            var sharedExcelPath = ResolveSharedExcelPath(parentPath);
+            if (sharedExcelPath != null)
+            {
+                await foreach (var ev in CheckMultiSharedExcelAsync(parentPath, sharedExcelPath, input, cancellationToken))
+                {
+                    yield return ev;
+                }
+                yield break;
+            }
+
             var childDirs = Directory.GetDirectories(parentPath);
             if (childDirs.Length == 0)
             {
@@ -1356,6 +1370,538 @@ namespace Sip.be.Application.Document.Implements
         {
             return string.Join(' ', value.ToLowerInvariant().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
                 .Replace(": ", ":").Replace(" :", ":");
+        }
+
+        // =====================================================================
+        // ===== KIỂM TRA NHIỀU HỒ SƠ — CẤU TRÚC EXCEL DÙNG CHUNG (loại 2/3) =====
+        // =====================================================================
+        // Cấu trúc: thư mục cha chứa các thư mục hồ sơ con (bên trong là file data TRỰC TIẾP),
+        // cùng 1 file Excel dùng CHUNG cho cả batch — đặt trực tiếp ở thư mục cha (loại 2) hoặc
+        // trong folder 'metadata' của thư mục cha (loại 3). Khớp: mã hồ sơ (sheet Ho_so) = tên thư mục con,
+        // mã lưu trữ tài liệu (sheet Van_ban) = tên file; mã lưu trữ chứa mã hồ sơ làm tiền tố (maHoSo + '.').
+
+        /// <summary>
+        /// Dò file Excel dùng CHUNG ở thư mục cha: ưu tiên Excel trong folder 'metadata' của cha (loại 3),
+        /// sau đó Excel đặt trực tiếp ở thư mục cha (loại 2). Trả về null nếu không có (=> cấu trúc loại 1).
+        /// </summary>
+        private static string ResolveSharedExcelPath(string parentPath)
+        {
+            var metadataDir = Directory.GetDirectories(parentPath)
+                .FirstOrDefault(d => string.Equals(new DirectoryInfo(d).Name, CheckConstants.MetadataFolderName, StringComparison.OrdinalIgnoreCase));
+            if (metadataDir != null)
+            {
+                var excelInMetadata = Directory.GetFiles(metadataDir)
+                    .FirstOrDefault(f => CheckConstants.ExcelExtensions.Contains(Path.GetExtension(f)));
+                if (excelInMetadata != null) return excelInMetadata;
+            }
+            return Directory.GetFiles(parentPath)
+                .FirstOrDefault(f => CheckConstants.ExcelExtensions.Contains(Path.GetExtension(f)));
+        }
+
+        private async IAsyncEnumerable<MultiCheckProgressDto> CheckMultiSharedExcelAsync(
+            string parentPath,
+            string sharedExcelPath,
+            CheckMultiFolderRequestDto input,
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            _logger.LogInformation($"{nameof(CheckMultiSharedExcelAsync)}: Excel chung = {sharedExcelPath}");
+
+            // Hồ sơ con = mọi thư mục con TRỪ folder 'metadata' chung (loại 3).
+            var childDirs = Directory.GetDirectories(parentPath)
+                .Where(d => !string.Equals(new DirectoryInfo(d).Name, CheckConstants.MetadataFolderName, StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+
+            if (childDirs.Length == 0)
+            {
+                yield return new MultiCheckProgressDto
+                {
+                    Phase = (int)MultiCheckPhase.StructureValidation,
+                    PhaseName = CheckConstants.StageNameStructureValidation,
+                    TargetType = CheckConstants.TargetTypeParent,
+                    Status = StatusCodeE.Error,
+                    Code = ErrorCodes.NoHoSoInParent,
+                    Message = "Thư mục cha không chứa hồ sơ con nào.",
+                    Completed = true
+                };
+                yield break;
+            }
+
+            var total = childDirs.Length;
+            var completed = 0;
+            var folderNames = childDirs.Select(d => new DirectoryInfo(d).Name).ToList();
+
+            // Manifest: liệt kê sẵn tên các hồ sơ con để FE seed các dòng (spinner) trước khi có kết quả.
+            yield return new MultiCheckProgressDto
+            {
+                Phase = (int)MultiCheckPhase.StructureValidation,
+                PhaseName = CheckConstants.StageNameStructureValidation,
+                TargetType = CheckConstants.TargetTypeManifest,
+                HoSoNames = folderNames.ToList(),
+                Status = StatusCodeE.Success,
+                Code = 200,
+                TotalHoSo = total
+            };
+
+            // ===== Đọc Excel chung 1 LẦN (tuần tự) -> trích ra memory; lỗi ở đây là cấp cha -> dừng cả batch =====
+            var parsed = TryParseSharedExcel(sharedExcelPath);
+            if (!parsed.Ok)
+            {
+                yield return new MultiCheckProgressDto
+                {
+                    Phase = (int)MultiCheckPhase.StructureValidation,
+                    PhaseName = CheckConstants.StageNameStructureValidation,
+                    TargetType = CheckConstants.TargetTypeParent,
+                    Status = StatusCodeE.Error,
+                    Code = parsed.Code,
+                    Message = parsed.Message,
+                    Completed = true
+                };
+                yield break;
+            }
+            var data = parsed.Data!;
+
+            // Map mã hồ sơ -> dòng Ho_so; đồng thời dò trùng mã hồ sơ trong sheet Ho_so.
+            var hoSoByCode = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+            var dupHoSoCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var row in data.HoSoRows)
+            {
+                var ma = GetCellValue(row, CheckConstants.ColMaHoSo);
+                if (string.IsNullOrWhiteSpace(ma)) continue;
+                if (!hoSoByCode.TryAdd(ma, row)) dupHoSoCodes.Add(ma);
+            }
+
+            // Gán tài liệu (dòng Van_ban) về hồ sơ: mã lưu trữ chứa mã hồ sơ làm tiền tố (maLuuTru bắt đầu bằng "maHoSo.").
+            // Chọn hồ sơ có tên (mã) là tiền tố DÀI NHẤT để tránh nhầm khi các mã lồng nhau.
+            var vanBanByHoSo = folderNames.ToDictionary(n => n, _ => new List<Dictionary<string, string>>(), StringComparer.OrdinalIgnoreCase);
+            var orphanDocs = new List<string>();
+            foreach (var row in data.VanBanRows)
+            {
+                var maLuuTru = GetCellValue(row, CheckConstants.ColMaLuuTruTaiLieu);
+                if (string.IsNullOrWhiteSpace(maLuuTru)) continue;
+                var owner = folderNames
+                    .Where(n => maLuuTru.StartsWith(n + ".", StringComparison.OrdinalIgnoreCase))
+                    .OrderByDescending(n => n.Length)
+                    .FirstOrDefault();
+                if (owner == null) orphanDocs.Add(maLuuTru);
+                else vanBanByHoSo[owner].Add(row);
+            }
+
+            // ================= PHASE 1: TRÙNG LẶP TÊN THƯ MỤC / TÊN FILE (tuần tự) =================
+            var dupFolderNames = childDirs
+                .GroupBy(d => new DirectoryInfo(d).Name, StringComparer.OrdinalIgnoreCase)
+                .Where(g => g.Count() > 1)
+                .Select(g => g.Key)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var fileOwners = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase); // tên file -> các hồ sơ chứa nó
+            foreach (var dir in childDirs)
+            {
+                var name = new DirectoryInfo(dir).Name;
+                foreach (var file in Directory.GetFiles(dir))
+                {
+                    var fileName = Path.GetFileName(file);
+                    if (!fileOwners.TryGetValue(fileName, out var owners))
+                    {
+                        owners = new List<string>();
+                        fileOwners[fileName] = owners;
+                    }
+                    owners.Add(name);
+                }
+            }
+            var dupFilesByHoSo = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var kv in fileOwners)
+            {
+                if (kv.Value.Count <= 1) continue;
+                foreach (var owner in kv.Value.Distinct(StringComparer.OrdinalIgnoreCase))
+                {
+                    if (!dupFilesByHoSo.TryGetValue(owner, out var set))
+                    {
+                        set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                        dupFilesByHoSo[owner] = set;
+                    }
+                    set.Add(kv.Key);
+                }
+            }
+
+            var validFolders = new List<string>();
+            foreach (var dir in childDirs)
+            {
+                var name = new DirectoryInfo(dir).Name;
+                var errors = new List<string>();
+                if (dupFolderNames.Contains(name))
+                    errors.Add($"Tên thư mục hồ sơ '{name}' bị trùng lặp trong thư mục cha.");
+                if (dupFilesByHoSo.TryGetValue(name, out var dupFiles))
+                    errors.Add($"Tên file bị trùng lặp với hồ sơ khác: {string.Join(", ", dupFiles.OrderBy(x => x))}.");
+
+                if (errors.Count > 0)
+                {
+                    completed++;
+                    yield return new MultiCheckProgressDto
+                    {
+                        Phase = (int)MultiCheckPhase.StructureValidation,
+                        PhaseName = CheckConstants.StageNameStructureValidation,
+                        TargetType = CheckConstants.TargetTypeHoSo,
+                        HoSoName = name,
+                        Status = StatusCodeE.Error,
+                        Code = ErrorCodes.CheckHasErrors,
+                        Message = "Hồ sơ không hợp lệ ở bước kiểm tra cấu trúc/trùng lặp.",
+                        Errors = errors,
+                        TotalHoSo = total,
+                        CompletedHoSo = completed
+                    };
+                }
+                else
+                {
+                    validFolders.Add(dir);
+                }
+            }
+
+            // Nạp cấu hình 1 LẦN trước khi chia luồng (DbContext KHÔNG thread-safe).
+            var configHoSoList = await _sipDbContext.ConfigHoSo.Where(x => !x.Deleted).ToListAsync(cancellationToken);
+            var configVanBanList = await _sipDbContext.ConfigVanBan.Where(x => !x.Deleted).ToListAsync(cancellationToken);
+
+            // ================= PHASE 2: KIỂM TRA NỘI DUNG (song song, giới hạn luồng) =================
+            var results = new ConcurrentBag<HoSoCheckResult>();
+            if (validFolders.Count > 0)
+            {
+                var degree = input.MaxDegreeOfParallelism.GetValueOrDefault(Environment.ProcessorCount);
+                if (degree < 1) degree = 1;
+
+                var channel = Channel.CreateUnbounded<MultiCheckProgressDto>(new UnboundedChannelOptions
+                {
+                    SingleReader = true
+                });
+
+                var parallelOptions = new ParallelOptions
+                {
+                    MaxDegreeOfParallelism = degree,
+                    CancellationToken = cancellationToken
+                };
+
+                var producer = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await Parallel.ForEachAsync(validFolders, parallelOptions, async (folder, token) =>
+                        {
+                            var name = new DirectoryInfo(folder).Name;
+                            var hoSoRow = hoSoByCode.GetValueOrDefault(name);
+                            var vanBanRows = vanBanByHoSo.TryGetValue(name, out var vr) ? vr : new List<Dictionary<string, string>>();
+
+                            var r = InspectHoSoShared(folder, hoSoRow, vanBanRows, configHoSoList, configVanBanList, token);
+                            results.Add(r);
+
+                            var done = Interlocked.Increment(ref completed);
+                            await channel.Writer.WriteAsync(new MultiCheckProgressDto
+                            {
+                                Phase = (int)MultiCheckPhase.Processing,
+                                PhaseName = CheckConstants.StageNameProcessing,
+                                TargetType = CheckConstants.TargetTypeHoSo,
+                                HoSoName = r.HoSoName,
+                                Status = r.Ok ? StatusCodeE.Success : StatusCodeE.Error,
+                                Code = r.Ok ? 200 : ErrorCodes.CheckHasErrors,
+                                Message = r.Ok ? "Hồ sơ hợp lệ." : "Hồ sơ có lỗi, xem chi tiết.",
+                                Errors = r.Ok ? null : r.Errors,
+                                Files = r.Files.Count > 0 ? r.Files : null,
+                                FileCount = r.FileCount,
+                                TotalHoSo = total,
+                                CompletedHoSo = done
+                            }, token);
+                        });
+                    }
+                    finally
+                    {
+                        channel.Writer.Complete();
+                    }
+                }, cancellationToken);
+
+                await foreach (var ev in channel.Reader.ReadAllAsync(cancellationToken))
+                {
+                    yield return ev;
+                }
+
+                await producer;
+            }
+
+            // ===== Trùng mã hồ sơ trong sheet Ho_so (đánh dấu hồ sơ tương ứng là lỗi) =====
+            var dupCodeNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var code in dupHoSoCodes)
+            {
+                var owner = folderNames.FirstOrDefault(n => string.Equals(n, code, StringComparison.OrdinalIgnoreCase));
+                if (owner != null) dupCodeNames.Add(owner);
+
+                yield return new MultiCheckProgressDto
+                {
+                    Phase = (int)MultiCheckPhase.Processing,
+                    PhaseName = CheckConstants.StageNameProcessing,
+                    TargetType = CheckConstants.TargetTypeDuplicate,
+                    HoSoName = owner ?? string.Empty,
+                    Status = StatusCodeE.Error,
+                    Code = ErrorCodes.DuplicateHoSoCode,
+                    Message = $"Mã hồ sơ '{code}' bị khai trùng nhiều lần trong sheet '{CheckConstants.SheetHoSo}'.",
+                    Errors = new List<string> { $"Mã hồ sơ '{code}' xuất hiện nhiều dòng trong sheet '{CheckConstants.SheetHoSo}'." },
+                    TotalHoSo = total,
+                    CompletedHoSo = completed
+                };
+            }
+
+            // ===== Tài liệu 'mồ côi': mã lưu trữ không thuộc hồ sơ con nào (không có thư mục tương ứng) =====
+            if (orphanDocs.Count > 0)
+            {
+                yield return new MultiCheckProgressDto
+                {
+                    Phase = (int)MultiCheckPhase.Processing,
+                    PhaseName = CheckConstants.StageNameProcessing,
+                    TargetType = CheckConstants.TargetTypeParent,
+                    Status = StatusCodeE.Error,
+                    Code = ErrorCodes.CheckHasErrors,
+                    Message = $"Có {orphanDocs.Count} mã lưu trữ tài liệu không thuộc hồ sơ con nào.",
+                    Errors = orphanDocs.Select(m => $"Mã lưu trữ tài liệu '{m}' không khớp thư mục hồ sơ con nào.").ToList(),
+                    TotalHoSo = total,
+                    CompletedHoSo = completed
+                };
+            }
+
+            // ============================= TỔNG KẾT =============================
+            var okCount = results.Count(r => r.Ok && !dupCodeNames.Contains(r.HoSoName));
+            var errorCount = total - okCount;
+            var batchOk = errorCount == 0 && orphanDocs.Count == 0;
+
+            yield return new MultiCheckProgressDto
+            {
+                Phase = (int)MultiCheckPhase.Done,
+                PhaseName = CheckConstants.StageNameMultiSummary,
+                TargetType = CheckConstants.TargetTypeSummary,
+                Status = batchOk ? StatusCodeE.Success : StatusCodeE.Error,
+                Code = batchOk ? 200 : ErrorCodes.CheckHasErrors,
+                Message = batchOk
+                    ? $"Tất cả {total} hồ sơ đủ điều kiện đóng gói SIP theo chuẩn thông tư TT05."
+                    : $"Có {errorCount}/{total} hồ sơ chưa đạt" + (orphanDocs.Count > 0 ? $" và {orphanDocs.Count} tài liệu không thuộc hồ sơ nào" : string.Empty) + ", xem chi tiết.",
+                TotalHoSo = total,
+                CompletedHoSo = total,
+                OkCount = okCount,
+                ErrorCount = errorCount,
+                Completed = true
+            };
+        }
+
+        /// <summary>Dữ liệu Excel chung đã trích ra memory (mỗi dòng = map header chuẩn hoá -> giá trị) để xử lý sau khi đóng workbook.</summary>
+        private sealed class SharedExcelData
+        {
+            public List<Dictionary<string, string>> HoSoRows { get; set; } = new();
+            public List<Dictionary<string, string>> VanBanRows { get; set; } = new();
+        }
+
+        /// <summary>
+        /// Mở Excel chung, kiểm tra đủ 2 sheet + 2 cột khoá (Mã hồ sơ / Mã lưu trữ tài liệu), rồi trích toàn bộ dòng
+        /// dữ liệu ra memory và đóng workbook ngay. Trả về (Ok, Code, Message, Data) — Ok=false là lỗi cấp cha.
+        /// </summary>
+        private (bool Ok, int Code, string Message, SharedExcelData? Data) TryParseSharedExcel(string excelPath)
+        {
+            XLWorkbook? workbook;
+            try
+            {
+                workbook = new XLWorkbook(excelPath);
+            }
+            catch
+            {
+                return (false, ErrorCodes.ExcelFileUnreadable, $"Không đọc được file Excel chung '{Path.GetFileName(excelPath)}'.", null);
+            }
+
+            using (workbook)
+            {
+                if (!workbook.Worksheets.TryGetWorksheet(CheckConstants.SheetHoSo, out var hoSoSheet))
+                    return (false, ErrorCodes.SheetMissing, $"File Excel chung thiếu sheet '{CheckConstants.SheetHoSo}'.", null);
+                if (!workbook.Worksheets.TryGetWorksheet(CheckConstants.SheetVanBan, out var vanBanSheet))
+                    return (false, ErrorCodes.SheetMissing, $"File Excel chung thiếu sheet '{CheckConstants.SheetVanBan}'.", null);
+
+                var hoSoColumns = BuildColumnMap(hoSoSheet);
+                var vanBanColumns = BuildColumnMap(vanBanSheet);
+
+                if (!hoSoColumns.ContainsKey(EadFieldMapping.NormalizeHeader(CheckConstants.ColMaHoSo)))
+                    return (false, ErrorCodes.ColumnMissing, $"Sheet '{CheckConstants.SheetHoSo}' thiếu cột '{CheckConstants.ColMaHoSo}'.", null);
+                if (!vanBanColumns.ContainsKey(EadFieldMapping.NormalizeHeader(CheckConstants.ColMaLuuTruTaiLieu)))
+                    return (false, ErrorCodes.ColumnMissing, $"Sheet '{CheckConstants.SheetVanBan}' thiếu cột '{CheckConstants.ColMaLuuTruTaiLieu}'.", null);
+
+                var data = new SharedExcelData
+                {
+                    HoSoRows = hoSoSheet.RowsUsed().Skip(1).Select(r => BuildRowCells(r, hoSoColumns)).ToList(),
+                    VanBanRows = vanBanSheet.RowsUsed().Skip(1).Select(r => BuildRowCells(r, vanBanColumns)).ToList()
+                };
+                return (true, 200, string.Empty, data);
+            }
+        }
+
+        /// <summary>Trích 1 dòng thành map (header đã chuẩn hoá -> giá trị đã trim) cho MỌI cột trong header (kể cả ô trống).</summary>
+        private static Dictionary<string, string> BuildRowCells(IXLRow row, Dictionary<string, int> columnMap)
+        {
+            var cells = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var kv in columnMap)
+            {
+                cells[kv.Key] = row.Cell(kv.Value).GetString().Trim();
+            }
+            return cells;
+        }
+
+        /// <summary>Lấy giá trị 1 cột (theo tên gốc) từ map dòng đã trích; rỗng nếu cột không có trong sheet.</summary>
+        private static string GetCellValue(IReadOnlyDictionary<string, string> cells, string columnName)
+        {
+            return cells.TryGetValue(EadFieldMapping.NormalizeHeader(columnName), out var value) ? value : string.Empty;
+        }
+
+        /// <summary>
+        /// Kiểm tra nội dung 1 hồ sơ ở cấu trúc Excel dùng CHUNG (loại 2/3): file data nằm TRỰC TIẾP trong thư mục hồ sơ;
+        /// dữ liệu mô tả lấy từ dòng Ho_so (khớp mã = tên thư mục) + các dòng Van_ban thuộc hồ sơ (đã trích sẵn từ Excel chung).
+        /// THUẦN: không truy cập DB/workbook -> an toàn khi chạy song song.
+        /// </summary>
+        public HoSoCheckResult InspectHoSoShared(
+            string folderPath,
+            IReadOnlyDictionary<string, string>? hoSoRow,
+            IReadOnlyList<Dictionary<string, string>> vanBanRows,
+            IReadOnlyList<ConfigHoSo> configHoSo,
+            IReadOnlyList<ConfigVanBan> configVanBan,
+            CancellationToken cancellationToken)
+        {
+            var result = new HoSoCheckResult { HoSoName = new DirectoryInfo(folderPath).Name };
+            result.MaHoSo = result.HoSoName;
+
+            // Gán lỗi vào 1 file trong bảng con (khớp theo tên đầy đủ HOẶC tên không đuôi = mã lưu trữ); lỗi đầu tiên thắng.
+            void MarkFileError(string key, string reason)
+            {
+                var row = result.Files.FirstOrDefault(f =>
+                    string.Equals(f.Name, key, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(Path.GetFileNameWithoutExtension(f.Name), key, StringComparison.OrdinalIgnoreCase));
+                if (row != null && row.Status != StatusCodeE.Error)
+                {
+                    row.Status = StatusCodeE.Error;
+                    row.Reason = reason;
+                }
+            }
+
+            var dataFiles = Directory.GetFiles(folderPath);
+            result.FileCount = dataFiles.Length;
+            // Seed 1 dòng/file (mặc định Success); các bước sau đánh dấu lỗi vào đúng file.
+            foreach (var f in dataFiles)
+            {
+                result.Files.Add(new FileCheckResultDto { Name = Path.GetFileName(f), Status = StatusCodeE.Success });
+            }
+
+            if (dataFiles.Length == 0)
+            {
+                result.Errors.Add("Thư mục hồ sơ không có file dữ liệu.");
+                return result;
+            }
+
+            // Định dạng file (không nghiêm trọng -> gom lỗi, kiểm tra tiếp)
+            foreach (var file in dataFiles)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!CheckConstants.AllowedAttachmentExtensions.Contains(Path.GetExtension(file)))
+                {
+                    result.Errors.Add($"File '{Path.GetFileName(file)}' có định dạng không được hỗ trợ.");
+                    MarkFileError(Path.GetFileName(file), "Định dạng file không được hỗ trợ.");
+                }
+            }
+
+            // Giai đoạn khớp mã: hồ sơ phải có dòng Ho_so khớp mã (= tên thư mục)
+            if (hoSoRow == null)
+            {
+                result.Errors.Add($"Không tìm thấy mã hồ sơ '{result.HoSoName}' trong sheet '{CheckConstants.SheetHoSo}' của Excel chung.");
+            }
+
+            // Khớp mã lưu trữ tài liệu <-> tên file (trong phạm vi hồ sơ này)
+            var maTaiLieuSet = new HashSet<string>(
+                vanBanRows.Select(r => GetCellValue(r, CheckConstants.ColMaLuuTruTaiLieu)).Where(v => !string.IsNullOrWhiteSpace(v)),
+                StringComparer.OrdinalIgnoreCase);
+            var fileNameSet = new HashSet<string>(dataFiles.Select(Path.GetFileNameWithoutExtension), StringComparer.OrdinalIgnoreCase);
+
+            foreach (var file in dataFiles)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!maTaiLieuSet.Contains(Path.GetFileNameWithoutExtension(file)))
+                {
+                    result.Errors.Add($"File '{Path.GetFileName(file)}' không có mã lưu trữ tài liệu tương ứng trong sheet '{CheckConstants.SheetVanBan}'.");
+                    MarkFileError(Path.GetFileName(file), $"Không có mã lưu trữ tương ứng trong sheet '{CheckConstants.SheetVanBan}'.");
+                }
+            }
+            foreach (var ma in maTaiLieuSet)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!fileNameSet.Contains(ma))
+                {
+                    result.Errors.Add($"Mã lưu trữ tài liệu '{ma}' không có file tương ứng trong thư mục hồ sơ.");
+                }
+            }
+
+            // Giai đoạn nội dung: sheet Ho_so (dòng của hồ sơ này)
+            if (configHoSo.Count > 0 && hoSoRow != null)
+            {
+                foreach (var cfg in configHoSo)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    ValidateFieldCells(cfg.TruongThongTin, cfg.MoTa, cfg.BatBuoc == ConfigConstants.BatBuoc,
+                        hoSoRow, CheckConstants.SheetHoSo, null, result.Errors);
+                }
+            }
+
+            // Giai đoạn nội dung: sheet Van_ban (mỗi tài liệu thuộc hồ sơ này)
+            if (configVanBan.Count > 0)
+            {
+                foreach (var row in vanBanRows)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var rowLabel = GetCellValue(row, CheckConstants.ColMaLuuTruTaiLieu);
+                    if (string.IsNullOrWhiteSpace(rowLabel)) rowLabel = "Dòng không có mã lưu trữ";
+
+                    var rowErrors = new List<string>();
+                    foreach (var cfg in configVanBan)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        ValidateFieldCells(cfg.TruongThongTin, cfg.MoTa, cfg.BatBuoc == ConfigConstants.BatBuoc,
+                            row, CheckConstants.SheetVanBan, rowLabel, rowErrors);
+                    }
+                    if (rowErrors.Count > 0)
+                    {
+                        result.Errors.AddRange(rowErrors);
+                        MarkFileError(rowLabel, rowErrors[0]); // rowLabel = mã lưu trữ = tên file (không đuôi)
+                    }
+                }
+            }
+
+            result.Ok = result.Errors.Count == 0;
+            return result;
+        }
+
+        /// <summary>
+        /// Kiểm tra 1 trường của 1 dòng đã trích ra map (bắt buộc/trống/enum), gom lỗi vào <paramref name="errors"/>.
+        /// Bản dùng cho cấu trúc Excel chung (thao tác trên map thay vì IXLRow).
+        /// </summary>
+        public void ValidateFieldCells(
+            string truongThongTin, string? moTa, bool isRequired,
+            IReadOnlyDictionary<string, string> cells,
+            string sheetName, string? rowLabel, List<string> errors)
+        {
+            var prefix = rowLabel == null ? $"Sheet '{sheetName}'" : $"File '{rowLabel}' (sheet '{sheetName}')";
+
+            if (!cells.TryGetValue(EadFieldMapping.NormalizeHeader(truongThongTin), out var value))
+            {
+                if (isRequired)
+                    errors.Add($"{prefix} thiếu cột bắt buộc '{truongThongTin}'.");
+                return;
+            }
+
+            value = (value ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                if (isRequired)
+                    errors.Add($"{prefix}: trường bắt buộc '{truongThongTin}' đang để trống.");
+                return;
+            }
+
+            if (!IsFieldValueValid(value, moTa))
+            {
+                errors.Add($"{prefix}: trường '{truongThongTin}' có giá trị '{value}' không hợp lệ theo mô tả.");
+            }
         }
     }
 }

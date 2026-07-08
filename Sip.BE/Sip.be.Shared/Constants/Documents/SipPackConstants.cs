@@ -10,7 +10,7 @@ namespace Sip.be.Shared.Constants.Documents
     public static class SipPackConstants
     {
         // ----- Phần mềm tạo gói -----
-        public const string AgentName = "SipPack";            // <agent>/<name>
+        public const string AgentName = "DongGoiSip";            // <agent>/<name>
         public const string AgentRole = "CREATOR";            // <agent>/@ROLE
         public const string AgentTypeSoftware = "OTHER";      // agent root @TYPE
         public const string AgentOtherType = "SOFTWARE";      // agent root @OTHERTYPE

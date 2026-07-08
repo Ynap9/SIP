@@ -261,7 +261,7 @@ Cài [Inno Setup](https://jrsoftware.org/isdl.php) → mở `Sip.BE/installer/SI
 | [`docs/chuan-dong-goi-sip-tt05.md`](./docs/chuan-dong-goi-sip-tt05.md) | Chuẩn đóng gói `SIP_tailieu` (Phụ lục IV — TT05/2025/TT-BNV) + đối chiếu gói mẫu thực tế. |
 | [`docs/thiet-ke-db-dong-goi-sip.md`](./docs/thiet-ke-db-dong-goi-sip.md) | Thiết kế dữ liệu phục vụ kiểm tra & đóng gói SIP. |
 | [`docs/desktop-packaging.plan.md`](./docs/desktop-packaging.plan.md) | Phương án đóng gói desktop (Hướng C — .NET host WebView2 / Photino). |
-| [`Sip.FE/docs/`](./Sip.FE/docs/) | `project-structure`, `ui-guidelines`, `sakai-layout`… của frontend. |
+| [`.claude/fe/docs/`](./.claude/fe/docs/) | `project-structure`, `ui-guidelines`, `sakai-layout`… của frontend. |
 
 ---
 
