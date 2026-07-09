@@ -15,7 +15,10 @@
       <p class="text-sm text-indigo-600 break-all px-4 text-center">{{ sourcePath() }}</p>
     }
     @if (desktop.isDesktop) {
-      <p-button label="Chọn thư mục" icon="pi pi-folder-open" severity="secondary" [outlined]="true" (onClick)="chooseSource()" />
+      <div class="flex gap-2">
+        <p-button label="Chọn file .zip" icon="pi pi-file" severity="secondary" [outlined]="true" (onClick)="chooseSourceFile()" />
+        <p-button label="Chọn thư mục gói" icon="pi pi-folder-open" severity="secondary" [outlined]="true" (onClick)="chooseSource()" />
+      </div>
     }
   </div>
 

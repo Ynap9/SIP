@@ -449,16 +449,33 @@ namespace Sip.be.Application.Document.Implements
                             .Where(v => !string.IsNullOrWhiteSpace(v)),
                         StringComparer.OrdinalIgnoreCase);
 
-                    var fileNameSet = new HashSet<string>(
-                        attachmentFiles.Select(f => Path.GetFileNameWithoutExtension(f)),
-                        StringComparer.OrdinalIgnoreCase);
-
-                    // Mỗi file đính kèm phải có mã định danh tương ứng (phát hiện file thừa)
+                    // Mỗi file đính kèm: (a) tên phải THUỘC hồ sơ (bắt đầu bằng "{mã hồ sơ}."),
+                    // (b) phải khớp 1 mã định danh tài liệu trong sheet (phát hiện file thừa/sai tên).
+                    // Chiều ngược lại (mã định danh có trong sheet nhưng THIẾU file) KHÔNG còn tính là lỗi.
                     foreach (var file in attachmentFiles)
                     {
                         cancellationToken.ThrowIfCancellationRequested();
                         var fileName = Path.GetFileName(file);
                         var nameNoExt = Path.GetFileNameWithoutExtension(file);
+
+                        // (a) Tên file phải bắt đầu bằng "{mã hồ sơ}." (mã định danh tài liệu = mã hồ sơ + số thứ tự).
+                        if (!nameNoExt.StartsWith(hoSoFolderName + ".", StringComparison.OrdinalIgnoreCase))
+                        {
+                            errorCount++;
+                            yield return new CheckProgressDto
+                            {
+                                Stage = (int)CheckStage.CodeMatching,
+                                StageName = CheckConstants.StageNameCodeMatching,
+                                TargetType = CheckConstants.TargetTypeFile,
+                                Target = fileName,
+                                Status = StatusCodeE.Error,
+                                Code = ErrorCodes.FileNotBelongToHoSo,
+                                Message = $"File '{fileName}' không thuộc hồ sơ '{hoSoFolderName}' (tên file phải bắt đầu bằng mã hồ sơ '{hoSoFolderName}.')."
+                            };
+                            continue;
+                        }
+
+                        // (b) Tên file phải khớp 1 mã định danh tài liệu trong sheet.
                         if (maTaiLieuSet.Contains(nameNoExt))
                         {
                             yield return new CheckProgressDto
@@ -484,26 +501,6 @@ namespace Sip.be.Application.Document.Implements
                                 Status = StatusCodeE.Error,
                                 Code = ErrorCodes.AttachmentExtraFile,
                                 Message = $"File '{fileName}' không có mã định danh tài liệu tương ứng trong sheet '{CheckConstants.SheetVanBan}'."
-                            };
-                        }
-                    }
-
-                    // Mỗi mã định danh phải có file (phát hiện file thiếu)
-                    foreach (var ma in maTaiLieuSet)
-                    {
-                        cancellationToken.ThrowIfCancellationRequested();
-                        if (!fileNameSet.Contains(ma))
-                        {
-                            errorCount++;
-                            yield return new CheckProgressDto
-                            {
-                                Stage = (int)CheckStage.CodeMatching,
-                                StageName = CheckConstants.StageNameCodeMatching,
-                                TargetType = CheckConstants.TargetTypeCode,
-                                Target = ma,
-                                Status = StatusCodeE.Error,
-                                Code = ErrorCodes.AttachmentMissingForCode,
-                                Message = $"Mã định danh tài liệu '{ma}' không có file đính kèm tương ứng trong thư mục attachment."
                             };
                         }
                     }
@@ -584,23 +581,9 @@ namespace Sip.be.Application.Document.Implements
 
                         var value = hoSoDataRow.Cell(col).GetString().Trim();
 
-                        // Trống: lỗi nếu bắt buộc, ngược lại bỏ qua
+                        // Trống: bỏ qua (trường bắt buộc chỉ cần CÓ CỘT, KHÔNG bắt buộc có dữ liệu).
                         if (string.IsNullOrWhiteSpace(value))
                         {
-                            if (isRequired)
-                            {
-                                errorCount++;
-                                yield return new CheckProgressDto
-                                {
-                                    Stage = (int)CheckStage.ExcelContent,
-                                    StageName = CheckConstants.StageNameExcelContent,
-                                    TargetType = CheckConstants.TargetTypeField,
-                                    Target = cfg.TruongThongTin,
-                                    Status = StatusCodeE.Error,
-                                    Code = ErrorCodes.RequiredFieldEmpty,
-                                    Message = $"Trường bắt buộc '{cfg.TruongThongTin}' đang để trống."
-                                };
-                            }
                             continue;
                         }
 
@@ -709,23 +692,9 @@ namespace Sip.be.Application.Document.Implements
 
                             var value = row.Cell(col).GetString().Trim();
 
-                            // Trống: lỗi nếu bắt buộc, ngược lại bỏ qua
+                            // Trống: bỏ qua (trường bắt buộc chỉ cần CÓ CỘT, KHÔNG bắt buộc có dữ liệu).
                             if (string.IsNullOrWhiteSpace(value))
                             {
-                                if (isRequired)
-                                {
-                                    errorCount++;
-                                    yield return new CheckProgressDto
-                                    {
-                                        Stage = (int)CheckStage.ExcelContent,
-                                        StageName = CheckConstants.StageNameExcelContent,
-                                        TargetType = CheckConstants.TargetTypeField,
-                                        Target = target,
-                                        Status = StatusCodeE.Error,
-                                        Code = ErrorCodes.RequiredFieldEmpty,
-                                        Message = $"File '{rowLabel}' trong sheet '{CheckConstants.SheetVanBan}' đang thiếu cột '{cfg.TruongThongTin}'."
-                                    };
-                                }
                                 continue;
                             }
 
@@ -1242,25 +1211,26 @@ namespace Sip.be.Application.Document.Implements
                     var maTaiLieuSet = new HashSet<string>(
                         vanBanDataRows.Select(r => r.Cell(maTaiLieuCol).GetString().Trim()).Where(v => !string.IsNullOrWhiteSpace(v)),
                         StringComparer.OrdinalIgnoreCase);
-                    var fileNameSet = new HashSet<string>(
-                        attachmentFiles.Select(Path.GetFileNameWithoutExtension),
-                        StringComparer.OrdinalIgnoreCase);
 
+                    // Mỗi file: (a) tên phải THUỘC hồ sơ (bắt đầu bằng "{mã hồ sơ}."), (b) phải khớp mã định danh trong sheet.
+                    // Chiều ngược lại (mã định danh trong sheet nhưng THIẾU file) KHÔNG còn tính là lỗi.
                     foreach (var file in attachmentFiles)
                     {
                         cancellationToken.ThrowIfCancellationRequested();
-                        if (!maTaiLieuSet.Contains(Path.GetFileNameWithoutExtension(file)))
+                        var fileName = Path.GetFileName(file);
+                        var nameNoExt = Path.GetFileNameWithoutExtension(file);
+
+                        if (!nameNoExt.StartsWith(result.HoSoName + ".", StringComparison.OrdinalIgnoreCase))
                         {
-                            result.Errors.Add($"File '{Path.GetFileName(file)}' không có mã định danh tài liệu tương ứng trong sheet '{CheckConstants.SheetVanBan}'.");
-                            MarkFileError(Path.GetFileName(file), $"Không có mã định danh tương ứng trong sheet '{CheckConstants.SheetVanBan}'.");
+                            result.Errors.Add($"File '{fileName}' không thuộc hồ sơ '{result.HoSoName}' (tên file phải bắt đầu bằng mã hồ sơ '{result.HoSoName}.').");
+                            MarkFileError(fileName, $"Tên file không bắt đầu bằng mã hồ sơ '{result.HoSoName}.'.");
+                            continue;
                         }
-                    }
-                    foreach (var ma in maTaiLieuSet)
-                    {
-                        cancellationToken.ThrowIfCancellationRequested();
-                        if (!fileNameSet.Contains(ma))
+
+                        if (!maTaiLieuSet.Contains(nameNoExt))
                         {
-                            result.Errors.Add($"Mã định danh tài liệu '{ma}' không có file đính kèm tương ứng.");
+                            result.Errors.Add($"File '{fileName}' không có mã định danh tài liệu tương ứng trong sheet '{CheckConstants.SheetVanBan}'.");
+                            MarkFileError(fileName, $"Không có mã định danh tương ứng trong sheet '{CheckConstants.SheetVanBan}'.");
                         }
                     }
                 }
@@ -1339,8 +1309,7 @@ namespace Sip.be.Application.Document.Implements
             var value = row.Cell(col).GetString().Trim();
             if (string.IsNullOrWhiteSpace(value))
             {
-                if (isRequired)
-                    errors.Add($"{prefix}: trường bắt buộc '{truongThongTin}' đang để trống.");
+                // Trống: bỏ qua (trường bắt buộc chỉ cần CÓ CỘT, KHÔNG bắt buộc có dữ liệu).
                 return;
             }
 
@@ -1828,23 +1797,26 @@ namespace Sip.be.Application.Document.Implements
             var maTaiLieuSet = new HashSet<string>(
                 vanBanRows.Select(r => GetCellValue(r, CheckConstants.ColMaDinhDanhTaiLieu)).Where(v => !string.IsNullOrWhiteSpace(v)),
                 StringComparer.OrdinalIgnoreCase);
-            var fileNameSet = new HashSet<string>(dataFiles.Select(Path.GetFileNameWithoutExtension), StringComparer.OrdinalIgnoreCase);
 
+            // Mỗi file: (a) tên phải THUỘC hồ sơ (bắt đầu bằng "{mã hồ sơ}."), (b) phải khớp mã lưu trữ trong sheet.
+            // Chiều ngược lại (mã lưu trữ trong sheet nhưng THIẾU file) KHÔNG còn tính là lỗi.
             foreach (var file in dataFiles)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (!maTaiLieuSet.Contains(Path.GetFileNameWithoutExtension(file)))
+                var fileName = Path.GetFileName(file);
+                var nameNoExt = Path.GetFileNameWithoutExtension(file);
+
+                if (!nameNoExt.StartsWith(result.HoSoName + ".", StringComparison.OrdinalIgnoreCase))
                 {
-                    result.Errors.Add($"File '{Path.GetFileName(file)}' không có mã lưu trữ tài liệu tương ứng trong sheet '{CheckConstants.SheetVanBan}'.");
-                    MarkFileError(Path.GetFileName(file), $"Không có mã lưu trữ tương ứng trong sheet '{CheckConstants.SheetVanBan}'.");
+                    result.Errors.Add($"File '{fileName}' không thuộc hồ sơ '{result.HoSoName}' (tên file phải bắt đầu bằng mã hồ sơ '{result.HoSoName}.').");
+                    MarkFileError(fileName, $"Tên file không bắt đầu bằng mã hồ sơ '{result.HoSoName}.'.");
+                    continue;
                 }
-            }
-            foreach (var ma in maTaiLieuSet)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                if (!fileNameSet.Contains(ma))
+
+                if (!maTaiLieuSet.Contains(nameNoExt))
                 {
-                    result.Errors.Add($"Mã lưu trữ tài liệu '{ma}' không có file tương ứng trong thư mục hồ sơ.");
+                    result.Errors.Add($"File '{fileName}' không có mã lưu trữ tài liệu tương ứng trong sheet '{CheckConstants.SheetVanBan}'.");
+                    MarkFileError(fileName, $"Không có mã lưu trữ tương ứng trong sheet '{CheckConstants.SheetVanBan}'.");
                 }
             }
 
@@ -1908,8 +1880,7 @@ namespace Sip.be.Application.Document.Implements
             value = (value ?? string.Empty).Trim();
             if (string.IsNullOrWhiteSpace(value))
             {
-                if (isRequired)
-                    errors.Add($"{prefix}: trường bắt buộc '{truongThongTin}' đang để trống.");
+                // Trống: bỏ qua (trường bắt buộc chỉ cần CÓ CỘT, KHÔNG bắt buộc có dữ liệu).
                 return;
             }
 

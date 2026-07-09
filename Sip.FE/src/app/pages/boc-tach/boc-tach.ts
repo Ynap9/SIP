@@ -53,7 +53,15 @@ export class BocTach extends BaseComponent {
     }
   }
 
-  // Chọn thư mục gói (đã giải nén) bằng dialog native; file .zip thì kéo-thả/dán.
+  // Chọn file .zip bằng dialog native (lọc *.zip).
+  async chooseSourceFile(): Promise<void> {
+    const path = await this.desktop.pickFile();
+    if (path) {
+      this.sourcePath.set(Utils.normalizeFolderPath(path));
+    }
+  }
+
+  // Chọn thư mục gói (đã giải nén) bằng dialog native.
   async chooseSource(): Promise<void> {
     const path = await this.desktop.pickFolder();
     if (path) {

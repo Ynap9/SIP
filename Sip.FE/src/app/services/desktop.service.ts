@@ -10,6 +10,7 @@ import { environment } from '../../environments/environment';
 export class DesktopService {
   private external: any = (window as any).external;
   private pendingPickFolder?: (path: string) => void;
+  private pendingPickFile?: (path: string) => void;
 
   constructor() {
     if (this.isDesktop && typeof this.external.receiveMessage === 'function') {
@@ -41,6 +42,15 @@ export class DesktopService {
     });
   }
 
+  /** Mở dialog chọn file .zip native; trả về đường dẫn (rỗng nếu hủy / không phải desktop). */
+  pickFile(): Promise<string> {
+    if (!this.isDesktop) return Promise.resolve('');
+    return new Promise<string>((resolve) => {
+      this.pendingPickFile = resolve;
+      this.external.sendMessage('pickFile');
+    });
+  }
+
   /** Mở thư mục/file trong Explorer. Trả về false nếu không phải desktop (để gọi tự fallback). */
   openPath(path: string): boolean {
     if (!this.isDesktop || !path) return false;
@@ -49,10 +59,15 @@ export class DesktopService {
   }
 
   private onMessage(message: string): void {
-    if (typeof message === 'string' && message.startsWith('folder:') && this.pendingPickFolder) {
+    if (typeof message !== 'string') return;
+    if (message.startsWith('folder:') && this.pendingPickFolder) {
       const resolve = this.pendingPickFolder;
       this.pendingPickFolder = undefined;
       resolve(message.slice('folder:'.length));
+    } else if (message.startsWith('file:') && this.pendingPickFile) {
+      const resolve = this.pendingPickFile;
+      this.pendingPickFile = undefined;
+      resolve(message.slice('file:'.length));
     }
   }
 }

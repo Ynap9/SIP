@@ -181,24 +181,29 @@ namespace Sip.be.Application.Document.Implements
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                var docCode = ReadCell(row, vanBanColumns, CheckConstants.ColMaLuuTruTaiLieu);
-                if (string.IsNullOrWhiteSpace(docCode))
+                // Khớp file đính kèm theo MÃ ĐỊNH DANH tài liệu (= tên file), KHÔNG theo mã lưu trữ (docCode có thể
+                // khác tên file). Data = {docId}.pdf, metadata = EAD_DOC_{docId}.xml (theo gói mẫu thật). docCode chỉ
+                // là giá trị field <docCode> bên trong XML (do BuildSimpleDc sinh từ cột "Mã lưu trữ của tài liệu").
+                var docId = ReadCell(row, vanBanColumns, CheckConstants.ColMaDinhDanhTaiLieu);
+                if (string.IsNullOrWhiteSpace(docId))
                 {
-                    throw new UserFriendlyException(ErrorCodes.RequiredFieldEmpty, $"Sheet '{CheckConstants.SheetVanBan}' có dòng thiếu '{CheckConstants.ColMaLuuTruTaiLieu}'.");
+                    continue; // dòng không có mã định danh -> không gắn được file -> bỏ qua
                 }
 
                 var sourceFile = attachmentFiles.FirstOrDefault(f =>
-                    string.Equals(Path.GetFileNameWithoutExtension(f), docCode, StringComparison.OrdinalIgnoreCase));
+                    string.Equals(Path.GetFileNameWithoutExtension(f), docId, StringComparison.OrdinalIgnoreCase));
                 if (sourceFile == null)
                 {
-                    throw new UserFriendlyException(ErrorCodes.AttachmentMissingForCode, $"Không có file đính kèm cho tài liệu '{docCode}'.");
+                    // Tài liệu khai trong sheet nhưng THIẾU file đính kèm -> bỏ qua lặng lẽ (không lỗi, không cảnh báo),
+                    // vẫn đóng gói bình thường bằng dữ liệu của các file đang tồn tại.
+                    continue;
                 }
 
                 var dataFileName = Path.GetFileName(sourceFile);
                 var dataDestPath = Path.Combine(dataDir, dataFileName);
                 File.Copy(sourceFile, dataDestPath, true);
 
-                var metaFileName = $"{SipPackConstants.EadDocPrefix}{docCode}.xml";
+                var metaFileName = $"{SipPackConstants.EadDocPrefix}{docId}.xml";
                 var metaPath = Path.Combine(repMetadataDir, metaFileName);
                 var docXml = BuildSimpleDc(row, vanBanColumns, configVanBan.Select(c => (c.TruongThongTin, c.MoTa)).ToList(), EadFieldMapping.VanBan);
                 WriteXmlDocument(metaPath, new XDocument(new XDeclaration("1.0", "UTF-8", null), docXml));
@@ -857,24 +862,29 @@ namespace Sip.be.Application.Document.Implements
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                var docCode = ReadCell(row, vanBanColumns, CheckConstants.ColMaLuuTruTaiLieu);
-                if (string.IsNullOrWhiteSpace(docCode))
+                // Khớp file đính kèm theo MÃ ĐỊNH DANH tài liệu (= tên file), KHÔNG theo mã lưu trữ (docCode có thể
+                // khác tên file). Data = {docId}.pdf, metadata = EAD_DOC_{docId}.xml (theo gói mẫu thật). docCode chỉ
+                // là giá trị field <docCode> bên trong XML (do BuildSimpleDc sinh từ cột "Mã lưu trữ của tài liệu").
+                var docId = ReadCell(row, vanBanColumns, CheckConstants.ColMaDinhDanhTaiLieu);
+                if (string.IsNullOrWhiteSpace(docId))
                 {
-                    throw new UserFriendlyException(ErrorCodes.RequiredFieldEmpty, $"Sheet '{CheckConstants.SheetVanBan}' có dòng thiếu '{CheckConstants.ColMaLuuTruTaiLieu}'.");
+                    continue; // dòng không có mã định danh -> không gắn được file -> bỏ qua
                 }
 
                 var sourceFile = attachmentFiles.FirstOrDefault(f =>
-                    string.Equals(Path.GetFileNameWithoutExtension(f), docCode, StringComparison.OrdinalIgnoreCase));
+                    string.Equals(Path.GetFileNameWithoutExtension(f), docId, StringComparison.OrdinalIgnoreCase));
                 if (sourceFile == null)
                 {
-                    throw new UserFriendlyException(ErrorCodes.AttachmentMissingForCode, $"Không có file đính kèm cho tài liệu '{docCode}'.");
+                    // Tài liệu khai trong sheet nhưng THIẾU file đính kèm -> bỏ qua lặng lẽ (không lỗi, không cảnh báo),
+                    // vẫn đóng gói bình thường bằng dữ liệu của các file đang tồn tại.
+                    continue;
                 }
 
                 var dataFileName = Path.GetFileName(sourceFile);
                 var dataDestPath = Path.Combine(dataDir, dataFileName);
                 File.Copy(sourceFile, dataDestPath, true);
 
-                var metaFileName = $"{SipPackConstants.EadDocPrefix}{docCode}.xml";
+                var metaFileName = $"{SipPackConstants.EadDocPrefix}{docId}.xml";
                 var metaPath = Path.Combine(repMetadataDir, metaFileName);
                 var docXml = BuildSimpleDc(row, vanBanColumns, configVanBan.Select(c => (c.TruongThongTin, c.MoTa)).ToList(), EadFieldMapping.VanBan);
                 WriteXmlDocument(metaPath, new XDocument(new XDeclaration("1.0", "UTF-8", null), docXml));

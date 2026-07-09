@@ -44,5 +44,8 @@ namespace Sip.be.Shared.Request.ErrorRequest
         //Các mã lỗi cho luồng dịch ngược (unpack) gói SIP
         public const int UnpackSourceNotFound = 1022;
         public const int UnpackInvalidPackage = 1023;
+
+        //Tên file đính kèm không thuộc hồ sơ (không bắt đầu bằng "{mã hồ sơ}.")
+        public const int FileNotBelongToHoSo = 1024;
     }
 }

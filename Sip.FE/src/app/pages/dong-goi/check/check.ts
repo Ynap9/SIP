@@ -32,6 +32,11 @@ export class Check extends BaseComponent implements OnDestroy {
   completed = signal<boolean>(false);
   fileRows = signal<IFileRow[]>([]);
 
+  // Bảng hiển thị sắp theo SỐ THỨ TỰ sau mã hồ sơ (vd .1 < .2 < .10); nguồn cập nhật vẫn là fileRows.
+  sortedFileRows = computed(() =>
+    [...this.fileRows()].sort((a, b) => Utils.compareDocSeq(a.name, b.name))
+  );
+
   // File chưa ký số (đã có thông tin ký số và isSigned=false) -> cảnh báo khi đóng gói.
   unsignedFileNames = computed(() =>
     this.fileRows().filter((r) => r.signature && !r.signature.isSigned).map((r) => r.name)

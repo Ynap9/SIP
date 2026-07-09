@@ -145,12 +145,15 @@ export class Multi extends BaseComponent implements OnDestroy {
   }
 
   private applyHoSo(ev: IMultiCheckProgress): void {
-    const files: IFileRow[] = (ev.files ?? []).map((f) => ({
-      name: f.name,
-      status: f.status === 0 ? 'error' : 'ok',
-      reason: f.status === 0 ? f.reason : undefined,
-      signature: f.signature
-    }));
+    const files: IFileRow[] = (ev.files ?? [])
+      .map((f) => ({
+        name: f.name,
+        status: (f.status === 0 ? 'error' : 'ok') as IFileRow['status'],
+        reason: f.status === 0 ? f.reason : undefined,
+        signature: f.signature
+      }))
+      // Sắp theo SỐ THỨ TỰ sau mã hồ sơ (vd .1 < .2 < .10) cho bảng con file.
+      .sort((a, b) => Utils.compareDocSeq(a.name, b.name));
     const status: IHoSoRow['status'] = ev.status === 0 ? 'error' : 'ok';
     const reason = ev.status === 0 ? (ev.errors?.join(' | ') || ev.message) : undefined;
 

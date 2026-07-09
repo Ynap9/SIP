@@ -67,8 +67,9 @@ namespace Sip.Desktop
         /// <summary>
         /// Cầu nối FE -> native:
         /// - "pickFolder": mở dialog chọn thư mục, trả "folder:&lt;path&gt;".
+        /// - "pickFile": mở dialog chọn file .zip, trả "file:&lt;path&gt;".
         /// - "openPath:&lt;path&gt;": mở thư mục/file trong Explorer.
-        /// Lưu ý: chữ ký ShowOpenFolder có thể khác theo phiên bản Photino.NET -> chỉnh nếu build báo lỗi.
+        /// Lưu ý: chữ ký ShowOpenFolder/ShowOpenFile có thể khác theo phiên bản Photino.NET -> chỉnh nếu build báo lỗi.
         /// </summary>
         private static void OnWebMessage(object? sender, string message)
         {
@@ -80,15 +81,21 @@ namespace Sip.Desktop
                 var path = (paths != null && paths.Length > 0) ? paths[0] : string.Empty;
                 window.SendWebMessage("folder:" + path);
             }
+            else if (message == "pickFile")
+            {
+                var filters = new (string Name, string[] Extensions)[] { ("Gói SIP (*.zip)", new[] { "zip" }) };
+                var paths = window.ShowOpenFile("Chọn file gói SIP (.zip)", null, false, filters);
+                var path = (paths != null && paths.Length > 0) ? paths[0] : string.Empty;
+                window.SendWebMessage("file:" + path);
+            }
             else if (message.StartsWith("openPath:", StringComparison.Ordinal))
             {
-                var path = message["openPath:".Length..];
+                // Chuẩn hoá separator về Windows (BE có thể trả forward-slash lẫn lộn do outputPath dạng /).
+                var path = message["openPath:".Length..].Replace('/', '\\');
                 if (!string.IsNullOrWhiteSpace(path) && (Directory.Exists(path) || File.Exists(path)))
                 {
-                    Process.Start(new ProcessStartInfo("explorer.exe", $"\"{path}\"")
-                    {
-                        UseShellExecute = true
-                    });
+                    // ShellExecute: thư mục -> mở Explorer; file -> mở bằng app/trình duyệt mặc định.
+                    Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
                 }
             }
         }

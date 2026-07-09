@@ -164,6 +164,14 @@ export class Utils {
      * về dạng phù hợp để gửi cho BE: bỏ khoảng trắng/dấu nháy bao quanh, đổi backslash -> forward slash,
      * gộp slash lặp (giữ nguyên định dạng ổ đĩa Windows mà Directory.Exists chấp nhận).
      */
+    /**
+     * So sánh 2 tên file theo SỐ THỨ TỰ đứng sau mã hồ sơ (vd "...315.1" < "...315.2" < "...315.10").
+     * Numeric-aware: phần mã hồ sơ giống nhau nên chỉ khác ở số cuối, và số được so theo GIÁ TRỊ (không phải chữ).
+     */
+    static compareDocSeq(a: string, b: string): number {
+        return (a || '').localeCompare(b || '', undefined, { numeric: true, sensitivity: 'base' });
+    }
+
     static normalizeFolderPath(path: string): string {
         if (!path) return '';
         let p = path.trim();
