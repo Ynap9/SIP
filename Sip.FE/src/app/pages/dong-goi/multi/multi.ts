@@ -8,6 +8,7 @@ import { Utils } from '../../../shared/utils';
 import { MultiCheckService } from '../../../services/multi-check.service';
 import { DesktopService } from '../../../services/desktop.service';
 import { IMultiCheckProgress, IHoSoRow, IFileRow, ICollectUnsignedItem } from '../../../models/multi-check.models';
+import { ETimestampVerdict } from '../../../models/check.models';
 import { PackageMultiDialog } from './package-multi-dialog/package-multi-dialog';
 
 @Component({
@@ -43,6 +44,16 @@ export class Multi extends BaseComponent implements OnDestroy {
         fileNames: r.files.filter((f) => f.signature && !f.signature.isSigned).map((f) => f.name)
       }))
       .filter((i) => i.fileNames.length > 0)
+  );
+
+  // Enum verdict dấu thời gian để dùng trong template.
+  protected readonly EVerdict = ETimestampVerdict;
+
+  // Trong các hồ sơ ĐẠT có file không phải PDF (NotApplicable) -> cảnh báo khi đóng gói.
+  hasNonPdf = computed(() =>
+    this.hoSoRows()
+      .filter((r) => r.status === 'ok')
+      .some((r) => r.files.some((f) => f.signature?.timestamp?.verdict === ETimestampVerdict.NotApplicable))
   );
 
   private sub?: Subscription;
@@ -173,6 +184,18 @@ export class Multi extends BaseComponent implements OnDestroy {
     }
     if (this.passedHoSoNames().length === 0) {
       this.messageWarning('Không có hồ sơ nào đạt để đóng gói.');
+      return;
+    }
+    // Có file không phải PDF: cảnh báo trình kiểm tra ký số đang phát triển, vẫn cho đóng gói nếu người dùng đồng ý.
+    if (this.hasNonPdf()) {
+      this.confirmAction(
+        {
+          header: 'Có file không phải PDF',
+          message:
+            'Đang phát triển trình kiểm tra ký số cho file không phải PDF, vui lòng liên hệ admin. Bạn vẫn muốn đóng gói?'
+        },
+        () => this.showPackageDialog.set(true)
+      );
       return;
     }
     this.showPackageDialog.set(true);

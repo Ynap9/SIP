@@ -31,6 +31,16 @@
     </div>
   }
 
+  <!-- Chú thích cách đối chiếu thời gian ký (dưới ô đường dẫn cho web / dưới box cho desktop) -->
+  <p class="flex items-start gap-1 text-xs text-slate-500">
+    <i class="pi pi-info-circle mt-0.5"></i>
+    <span>
+      Hệ thống đối chiếu <b>thời gian ký</b> trên file với <b>dấu thời gian tin cậy</b> do máy chủ cấp dấu thời gian của
+      Ban Cơ yếu Chính phủ ký. File PDF không có dấu thời gian, sai nguồn cấp, hoặc lệch giờ quá mức cho phép sẽ bị coi
+      là không hợp lệ và không cho đóng gói.
+    </span>
+  </p>
+
   <!-- 2. Tiến trình + bảng (sinh ở giữa box và nút) -->
   @if (running() || completed()) {
     <p-progressbar [value]="percent()" />
@@ -45,6 +55,7 @@
           <th style="width: 9rem; text-align: center">Trạng thái</th>
           <th style="width: 9rem; text-align: center">Tình trạng</th>
           <th style="width: 13rem; text-align: center">Ký số</th>
+          <th style="width: 11rem; text-align: center">Dấu thời gian</th>
           <th style="text-align: center">Nguyên nhân lỗi</th>
         </tr>
       </ng-template>
@@ -109,6 +120,43 @@
             }
           </td>
 
+          <!-- Dấu thời gian tin cậy (RFC 3161) so với TSA Ban Cơ yếu -->
+          <td style="text-align: center">
+            @if (row.signature?.timestamp; as ts) {
+              <div class="flex flex-col items-center gap-0.5">
+                @switch (ts.verdict) {
+                  @case (EVerdict.ValidTrusted) {
+                    <span class="inline-flex items-center gap-1 text-xs font-medium text-green-600" [title]="ts.timestampAuthority || ''">
+                      <i class="pi pi-verified"></i> Hợp lệ
+                    </span>
+                  }
+                  @case (EVerdict.NotApplicable) {
+                    <span class="inline-flex items-center gap-1 text-xs font-medium text-amber-600" [title]="ts.reason || ''">
+                      <i class="pi pi-exclamation-triangle"></i> Không áp dụng
+                    </span>
+                  }
+                  @default {
+                    <span class="inline-flex items-center gap-1 text-xs font-medium text-red-600" [title]="ts.reason || ''">
+                      <i class="pi pi-times-circle"></i>
+                      @switch (ts.verdict) {
+                        @case (EVerdict.NoTimestamp) { Không có }
+                        @case (EVerdict.UntrustedTsa) { Không tin cậy }
+                        @case (EVerdict.TimeMismatch) { Lệch giờ }
+                        @default { Không hợp lệ }
+                      }
+                    </span>
+                  }
+                }
+                <!-- Thời gian của dấu thời gian tin cậy (đã +7h theo TSA VGCA) -->
+                @if (ts.trustedTime) {
+                  <span class="text-[11px] leading-tight text-slate-600">{{ ts.trustedTime }}</span>
+                }
+              </div>
+            } @else {
+              <span class="text-slate-300">—</span>
+            }
+          </td>
+
           <td style="text-align: center" class="text-red-600">{{ row.reason }}</td>
         </tr>
       </ng-template>
@@ -144,6 +192,7 @@
               }
             }
           </td>
+          <td style="text-align: center"><span class="text-slate-300">—</span></td>
           <td style="text-align: center"><span class="text-slate-300">—</span></td>
           <td style="text-align: center" [class.text-red-600]="hoSo().status === 'error'">
             {{ hoSo().reason }}

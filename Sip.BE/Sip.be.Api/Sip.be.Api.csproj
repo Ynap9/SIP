@@ -19,12 +19,20 @@
   <ItemGroup>
     <ProjectReference Include="..\Sip.be.Infratructure\Sip.be.Infratructure.csproj" />
     <ProjectReference Include="..\Sip.be.Application\Sip.be.Application.csproj" />
+    <ProjectReference Include="..\Sip.be.External\Sip.be.External.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <None Update="nlog.config">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Trust anchor Root G2 (Ban Cơ yếu) - gitignore, cấp out-of-band; copy ra output để SignatureVerifier nạp & đối chiếu pin. -->
+    <Content Include="rootcag2.crt" Condition="Exists('rootcag2.crt')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
 </Project>

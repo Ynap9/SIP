@@ -1,13 +1,13 @@
 using Sip.be.Application.Document.Dtos.Check;
+using Sip.be.Application.Document.Interfaces;
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace Sip.be.Application.Document.Implements
+namespace Sip.be.External.Documents
 {
     /// <summary>
     /// Đọc chữ ký số nhúng trong PDF (chuẩn PAdES/PKCS#7) mà KHÔNG cần thư viện ngoài.
@@ -18,7 +18,7 @@ namespace Sip.be.Application.Document.Implements
     /// Chỉ TRÍCH danh tính người ký + thời gian (giống Foxit hiển thị), KHÔNG xác thực toàn vẹn tài liệu
     /// hay chuỗi certificate.
     /// </summary>
-    public static class PdfSignatureReader
+    public class PdfSignatureReader : IPdfSignatureReader
     {
         // /ByteRange [start1 len1 start2 len2] — khối chữ ký nằm trong khoảng hở [start1+len1, start2).
         private static readonly Regex ByteRangeRegex =
@@ -34,7 +34,7 @@ namespace Sip.be.Application.Document.Implements
         /// Đọc thông tin ký số của 1 file. File không phải PDF -> trả về IsSigned=false (không đọc nội dung).
         /// Mọi lỗi đọc được nuốt và ghi vào <see cref="SignatureInfoDto.Error"/> (không ném ra ngoài).
         /// </summary>
-        public static SignatureInfoDto Read(string filePath)
+        public SignatureInfoDto Read(string filePath)
         {
             var info = new SignatureInfoDto();
             try

@@ -31,8 +31,14 @@ namespace Sip.be.Application.Document.Implements
         // Pattern nhận diện 1 dòng "mã: nhãn" trong mô tả (vd: "22: Công văn")
         private const string OptionPattern = @"^([A-Za-z0-9]{1,4})\s*[:：]\s*(.+)$";
 
-        public CheckService(SipDbContext sipDbContext, ILogger<BaseService> logger, IMapper mapper) : base(sipDbContext, logger, mapper)
+        private readonly IPdfSignatureReader _pdfSignatureReader;
+        private readonly ISignatureVerifier _signatureVerifier;
+
+        public CheckService(SipDbContext sipDbContext, ILogger<BaseService> logger, IMapper mapper,
+            IPdfSignatureReader pdfSignatureReader, ISignatureVerifier signatureVerifier) : base(sipDbContext, logger, mapper)
         {
+            _pdfSignatureReader = pdfSignatureReader;
+            _signatureVerifier = signatureVerifier;
         }
 
         // Wrapper: ước lượng tổng số bước rồi đóng dấu Current/Total (=> Percent) lên từng event để FE vẽ thanh tiến trình realtime.
@@ -261,8 +267,10 @@ namespace Sip.be.Application.Document.Implements
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     var fileName = Path.GetFileName(file);
-                    // Đọc chữ ký số của file để gắn kèm event (thông tin hiển thị, không tính là lỗi).
-                    var signature = PdfSignatureReader.Read(file);
+                    // Đọc chữ ký số + verify DẤU THỜI GIAN tin cậy (RFC 3161) của file để gắn kèm event.
+                    var signature = _pdfSignatureReader.Read(file);
+                    var ts = _signatureVerifier.Verify(file);
+                    signature.Timestamp = ts;
                     if (!CheckConstants.AllowedAttachmentExtensions.Contains(Path.GetExtension(file)))
                     {
                         errorCount++;
@@ -275,6 +283,22 @@ namespace Sip.be.Application.Document.Implements
                             Status = StatusCodeE.Error,
                             Code = ErrorCodes.AttachmentInvalidType,
                             Message = $"File '{fileName}' có định dạng không được hỗ trợ (chỉ chấp nhận PDF, hình ảnh, âm thanh, phim).",
+                            Signature = signature
+                        };
+                    }
+                    else if (ts.Blocks)
+                    {
+                        // PDF không có/không hợp lệ dấu thời gian tin cậy -> lỗi chặn đóng gói (non-PDF không rơi vào đây).
+                        errorCount++;
+                        yield return new CheckProgressDto
+                        {
+                            Stage = (int)CheckStage.FolderStructure,
+                            StageName = CheckConstants.StageNameFolderStructure,
+                            TargetType = CheckConstants.TargetTypeFile,
+                            Target = fileName,
+                            Status = StatusCodeE.Error,
+                            Code = ErrorCodes.TimestampInvalid,
+                            Message = ts.Reason ?? "Dấu thời gian/chữ ký số của file không hợp lệ.",
                             Signature = signature
                         };
                     }
@@ -1134,12 +1158,22 @@ namespace Sip.be.Application.Document.Implements
             // Seed 1 dòng/file (mặc định Success) kèm thông tin ký số; các bước sau đánh dấu lỗi vào đúng file.
             foreach (var f in attachmentFiles)
             {
-                result.Files.Add(new FileCheckResultDto
+                var sig = _pdfSignatureReader.Read(f);
+                var tsv = _signatureVerifier.Verify(f);
+                sig.Timestamp = tsv;
+                var fileRow = new FileCheckResultDto
                 {
                     Name = Path.GetFileName(f),
-                    Status = StatusCodeE.Success,
-                    Signature = PdfSignatureReader.Read(f)
-                });
+                    Status = tsv.Blocks ? StatusCodeE.Error : StatusCodeE.Success,
+                    Reason = tsv.Blocks ? (tsv.Reason ?? "Dấu thời gian/chữ ký số của file không hợp lệ.") : null,
+                    Signature = sig
+                };
+                // PDF không có/không hợp lệ dấu thời gian tin cậy -> lỗi hồ sơ (non-PDF không rơi vào đây).
+                if (tsv.Blocks)
+                {
+                    result.Errors.Add($"File '{fileRow.Name}': {fileRow.Reason}");
+                }
+                result.Files.Add(fileRow);
             }
             if (attachmentFiles.Length == 0)
             {
@@ -1762,12 +1796,22 @@ namespace Sip.be.Application.Document.Implements
             // Seed 1 dòng/file (mặc định Success) kèm thông tin ký số; các bước sau đánh dấu lỗi vào đúng file.
             foreach (var f in dataFiles)
             {
-                result.Files.Add(new FileCheckResultDto
+                var sig = _pdfSignatureReader.Read(f);
+                var tsv = _signatureVerifier.Verify(f);
+                sig.Timestamp = tsv;
+                var fileRow = new FileCheckResultDto
                 {
                     Name = Path.GetFileName(f),
-                    Status = StatusCodeE.Success,
-                    Signature = PdfSignatureReader.Read(f)
-                });
+                    Status = tsv.Blocks ? StatusCodeE.Error : StatusCodeE.Success,
+                    Reason = tsv.Blocks ? (tsv.Reason ?? "Dấu thời gian/chữ ký số của file không hợp lệ.") : null,
+                    Signature = sig
+                };
+                // PDF không có/không hợp lệ dấu thời gian tin cậy -> lỗi hồ sơ (non-PDF không rơi vào đây).
+                if (tsv.Blocks)
+                {
+                    result.Errors.Add($"File '{fileRow.Name}': {fileRow.Reason}");
+                }
+                result.Files.Add(fileRow);
             }
 
             if (dataFiles.Length == 0)

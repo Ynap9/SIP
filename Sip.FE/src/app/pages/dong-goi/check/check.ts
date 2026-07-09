@@ -8,7 +8,7 @@ import { BaseComponent } from '../../../shared/components/base/base-component';
 import { Utils } from '../../../shared/utils';
 import { CheckService } from '../../../services/check.service';
 import { DesktopService } from '../../../services/desktop.service';
-import { ICheckProgress, IFileRow } from '../../../models/check.models';
+import { ETimestampVerdict, ICheckProgress, IFileRow } from '../../../models/check.models';
 import { PackageDialog } from './package-dialog/package-dialog';
 
 @Component({
@@ -40,6 +40,14 @@ export class Check extends BaseComponent implements OnDestroy {
   // File chưa ký số (đã có thông tin ký số và isSigned=false) -> cảnh báo khi đóng gói.
   unsignedFileNames = computed(() =>
     this.fileRows().filter((r) => r.signature && !r.signature.isSigned).map((r) => r.name)
+  );
+
+  // Enum verdict dấu thời gian để dùng trong template.
+  protected readonly EVerdict = ETimestampVerdict;
+
+  // Có file không phải PDF (verdict NotApplicable) -> trình kiểm tra ký số đang phát triển -> cảnh báo khi đóng gói.
+  hasNonPdf = computed(() =>
+    this.fileRows().some((r) => r.signature?.timestamp?.verdict === ETimestampVerdict.NotApplicable)
   );
 
   // Dòng cuối: thông tin tổng kết hồ sơ
@@ -205,6 +213,18 @@ export class Check extends BaseComponent implements OnDestroy {
   onPackage(): void {
     if (!this.completed() || this.hoSo().status !== 'ok') {
       this.messageWarning('Hồ sơ không đủ điều kiện! Vui lòng kiểm tra lại hoặc liên hệ admin!');
+      return;
+    }
+    // Có file không phải PDF: cảnh báo trình kiểm tra ký số đang phát triển, vẫn cho đóng gói nếu người dùng đồng ý.
+    if (this.hasNonPdf()) {
+      this.confirmAction(
+        {
+          header: 'Có file không phải PDF',
+          message:
+            'Đang phát triển trình kiểm tra ký số cho file không phải PDF, vui lòng liên hệ admin. Bạn vẫn muốn đóng gói?'
+        },
+        () => this.showPackageDialog.set(true)
+      );
       return;
     }
     this.showPackageDialog.set(true);

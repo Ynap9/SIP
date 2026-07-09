@@ -15,6 +15,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sip.be.Shared", "..\Sip.be.
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sip.Desktop", "..\Sip.Desktop\Sip.Desktop.csproj", "{E13893D5-1B81-46B2-841C-0D251742F4A0}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sip.be.External", "..\Sip.be.External\Sip.be.External.csproj", "{51191FF0-E0E9-4941-AFAB-537096E28923}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -97,6 +99,18 @@ Global
 		{E13893D5-1B81-46B2-841C-0D251742F4A0}.Release|x64.Build.0 = Release|x64
 		{E13893D5-1B81-46B2-841C-0D251742F4A0}.Release|x86.ActiveCfg = Release|x64
 		{E13893D5-1B81-46B2-841C-0D251742F4A0}.Release|x86.Build.0 = Release|x64
+		{51191FF0-E0E9-4941-AFAB-537096E28923}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{51191FF0-E0E9-4941-AFAB-537096E28923}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{51191FF0-E0E9-4941-AFAB-537096E28923}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{51191FF0-E0E9-4941-AFAB-537096E28923}.Debug|x64.Build.0 = Debug|Any CPU
+		{51191FF0-E0E9-4941-AFAB-537096E28923}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{51191FF0-E0E9-4941-AFAB-537096E28923}.Debug|x86.Build.0 = Debug|Any CPU
+		{51191FF0-E0E9-4941-AFAB-537096E28923}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{51191FF0-E0E9-4941-AFAB-537096E28923}.Release|Any CPU.Build.0 = Release|Any CPU
+		{51191FF0-E0E9-4941-AFAB-537096E28923}.Release|x64.ActiveCfg = Release|Any CPU
+		{51191FF0-E0E9-4941-AFAB-537096E28923}.Release|x64.Build.0 = Release|Any CPU
+		{51191FF0-E0E9-4941-AFAB-537096E28923}.Release|x86.ActiveCfg = Release|Any CPU
+		{51191FF0-E0E9-4941-AFAB-537096E28923}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

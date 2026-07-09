@@ -6,12 +6,39 @@ export interface ISignerInfo {
   location?: string;
 }
 
+// Kết luận verify dấu thời gian (khớp enum TimestampVerdict BE - serialize dạng số).
+export enum ETimestampVerdict {
+  ValidTrusted = 0,
+  NoTimestamp = 1,
+  UntrustedTsa = 2,
+  TimeMismatch = 3,
+  NotApplicable = 4
+}
+
+// Kết quả verify DẤU THỜI GIAN tin cậy (RFC 3161) của 1 file (khớp TimestampVerifyDto BE).
+export interface ITimestampVerify {
+  /** ETimestampVerdict (số). */
+  verdict: number;
+  hasTimestamp: boolean;
+  timestampAuthority?: string;
+  /** genTime + 7h, "dd/MM/yyyy HH:mm:ss". */
+  trustedTime?: string;
+  signingTime?: string;
+  reason?: string;
+  /** = verdict ValidTrusted. */
+  isValid?: boolean;
+  /** Verdict này có chặn đóng gói không (PDF lỗi = true; hợp lệ & non-PDF = false). */
+  blocks?: boolean;
+}
+
 // Thông tin ký số của 1 file (khớp SignatureInfoDto BE).
 export interface ISignatureInfo {
   isSigned: boolean;
   signatureCount: number;
   signers: ISignerInfo[];
   error?: string;
+  /** Kết quả verify dấu thời gian tin cậy so với TSA Ban Cơ yếu (PDF verdict xấu -> chặn). */
+  timestamp?: ITimestampVerify;
 }
 
 // Kết quả gom file chưa ký số (khớp CollectUnsignedResultDto BE).

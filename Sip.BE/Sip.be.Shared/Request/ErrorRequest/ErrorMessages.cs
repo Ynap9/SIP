@@ -41,6 +41,8 @@ namespace Sip.be.Shared.Request.ErrorRequest
 
             { ErrorCodes.UnpackSourceNotFound, "Không tìm thấy gói SIP nguồn" },
             { ErrorCodes.UnpackInvalidPackage, "Không nhận diện được gói SIP hợp lệ" },
+
+            { ErrorCodes.TimestampInvalid, "Dấu thời gian/chữ ký số của file không hợp lệ" },
         };
 
         public static string GetMessage(int code)

@@ -4,6 +4,7 @@ using NLog.Web;
 using Sip.be.Application.Base;
 using Sip.be.Application.Document.Implements;
 using Sip.be.Application.Document.Interfaces;
+using Sip.be.External.Documents;
 using Sip.be.infratructure.Persistence;
 using Sip.be.Shared.Constants;
 
@@ -54,6 +55,9 @@ namespace Sip.be.Api
             builder.Services.AddScoped<ICheckService, CheckService>();
             builder.Services.AddScoped<IPackService, PackService>();
             builder.Services.AddScoped<IUnpackService, UnpackService>();
+            // Logic phụ trợ (bên thứ 3) ở Sip.be.External - đọc/verify chữ ký số PDF
+            builder.Services.AddScoped<IPdfSignatureReader, PdfSignatureReader>();
+            builder.Services.AddScoped<ISignatureVerifier, SignatureVerifier>();
             #endregion
             #region mapper
             builder.Services.AddAutoMapper(cfg => { }, typeof(MappingProfile));

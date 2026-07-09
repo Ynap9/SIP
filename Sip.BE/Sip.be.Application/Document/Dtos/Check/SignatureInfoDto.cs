@@ -19,6 +19,12 @@ namespace Sip.be.Application.Document.Dtos.Check
 
         /// <summary>Lý do không đọc được chữ ký (nếu có) - vd file không phải PDF hợp lệ.</summary>
         public string? Error { get; set; }
+
+        /// <summary>
+        /// Kết quả verify DẤU THỜI GIAN tin cậy (RFC 3161) so với TSA Ban Cơ yếu.
+        /// Khác với thông tin ký số ở trên: verdict xấu (PDF) CHẶN đóng gói.
+        /// </summary>
+        public TimestampVerifyDto? Timestamp { get; set; }
     }
 
     /// <summary>Thông tin 1 lần ký (1 chữ ký số) trong file.</summary>

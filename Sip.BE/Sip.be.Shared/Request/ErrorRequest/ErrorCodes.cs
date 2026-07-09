@@ -47,5 +47,8 @@ namespace Sip.be.Shared.Request.ErrorRequest
 
         //Tên file đính kèm không thuộc hồ sơ (không bắt đầu bằng "{mã hồ sơ}.")
         public const int FileNotBelongToHoSo = 1024;
+
+        //Dấu thời gian/chữ ký số của file PDF không hợp lệ (không có / TSA giả / lệch giờ)
+        public const int TimestampInvalid = 1025;
     }
 }
