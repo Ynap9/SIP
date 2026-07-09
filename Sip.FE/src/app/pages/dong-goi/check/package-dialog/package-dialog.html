@@ -53,6 +53,25 @@
         }
       </div>
     </div>
+
+    <!-- Cảnh báo file chưa ký số (không chặn đóng gói) -->
+    @if (unsignedFileNames().length) {
+      <div class="rounded border border-amber-200 bg-amber-50 p-2 text-sm text-amber-700">
+        <div class="flex items-center gap-2">
+          <i class="pi pi-exclamation-triangle"></i>
+          <span>Có <b>{{ unsignedFileNames().length }}</b> file chưa ký số. Bạn vẫn có thể tiếp tục đóng gói.</span>
+        </div>
+        <button
+          type="button"
+          class="mt-1 inline-flex items-center gap-1 font-medium text-amber-800 underline hover:text-amber-900 disabled:opacity-60"
+          [disabled]="collecting()"
+          (click)="onViewUnsigned()"
+        >
+          @if (collecting()) { <i class="pi pi-spin pi-spinner"></i> } @else { <i class="pi pi-folder-open"></i> }
+          Xem các file chưa ký số
+        </button>
+      </div>
+    }
   </div>
 
   <ng-template pTemplate="footer">

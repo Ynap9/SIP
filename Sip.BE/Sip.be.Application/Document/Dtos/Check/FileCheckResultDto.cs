@@ -15,5 +15,8 @@ namespace Sip.be.Application.Document.Dtos.Check
 
         /// <summary>Nguyên nhân lỗi (chỉ có khi file lỗi).</summary>
         public string? Reason { get; set; }
+
+        /// <summary>Thông tin ký số của file (đã ký hay chưa + người ký + thời điểm ký).</summary>
+        public SignatureInfoDto? Signature { get; set; }
     }
 }

@@ -3,6 +3,7 @@ import { Component, inject, input, model, output, signal } from '@angular/core';
 import { SharedImports } from '../../../../shared/import.shared';
 import { BaseComponent } from '../../../../shared/components/base/base-component';
 import { PackService } from '../../../../services/pack.service';
+import { CheckService } from '../../../../services/check.service';
 import { DesktopService } from '../../../../services/desktop.service';
 import { IPackRequest, IPackResult } from '../../../../models/pack.models';
 
@@ -14,12 +15,17 @@ import { IPackRequest, IPackResult } from '../../../../models/pack.models';
 })
 export class PackageDialog extends BaseComponent {
   private packService = inject(PackService);
+  private checkService = inject(CheckService);
   protected desktop = inject(DesktopService);
 
   // Thư mục hồ sơ đã kiểm tra (read-only) + trạng thái hiển thị form (two-way với cha)
   folderPath = input<string>('');
+  // Tên các file chưa ký số (để cảnh báo + gom lại khi người dùng muốn xem)
+  unsignedFileNames = input<string[]>([]);
   visible = model<boolean>(false);
   packed = output<IPackResult>();
+
+  collecting = signal<boolean>(false);
 
   // Field nhập (tất cả optional - BE nullable)
   maPhong = signal<string>('');
@@ -62,6 +68,25 @@ export class PackageDialog extends BaseComponent {
 
   closeSuccess(): void {
     this.showSuccess.set(false);
+  }
+
+  /** Gom các file chưa ký số vào thư mục "chưa ký số_{date}" rồi mở cho người dùng xem. */
+  onViewUnsigned(): void {
+    const names = this.unsignedFileNames();
+    if (!names.length || this.collecting()) return;
+    this.collecting.set(true);
+    this.checkService.collectUnsigned(this.folderPath(), names).subscribe({
+      next: (res) => {
+        this.collecting.set(false);
+        if (this.isResponseSucceed(res)) {
+          this.openFolder(res.data.parentPath);
+        }
+      },
+      error: () => {
+        this.collecting.set(false);
+        this.messageError('Không gom được file chưa ký số. Vui lòng thử lại.');
+      }
+    });
   }
 
   /** Chọn thư mục xuất bằng dialog native (desktop). */

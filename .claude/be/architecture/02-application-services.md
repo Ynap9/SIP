@@ -49,4 +49,6 @@ All services are **Scoped**. When adding a feature: create the interface + impl,
 ## Feature specifics
 - **ConfigService** — reads sheet `Mô tả_Ho_so`/`Mô tả_Van_ban`, `AddRangeAsync` + `SaveChangesAsync`; list queries filter `!Deleted` and project to `View*Dto`.
 - **CheckService** — 3 stages, yields `CheckProgressDto` per step (folder structure → code matching → Excel content); a wrapper estimates `Total` for progress %.
+  - **Chữ ký số**: mỗi file đính kèm được đọc chữ ký qua `PdfSignatureReader.Read(file)` (static, zero-dep — quét `/ByteRange`+`/Contents`, giải mã bằng `System.Security.Cryptography.Pkcs.SignedCms`, lấy CN cert + `signingTime`/`/M`). Kết quả gắn vào `CheckProgressDto.Signature` (single, event file gđ1) và `FileCheckResultDto.Signature` (multi). Thuần, chạy được trong nhánh song song. Thông tin ký số **không tính là lỗi** chặn đóng gói.
+  - **Gom file chưa ký**: `CollectUnsignedFilesAsync` (single) / `CollectUnsignedMultiAsync` (multi) copy các file (theo tên FE gửi) vào `chưa ký số_{date}/{Mã hồ sơ}_chưa ký số/` (tạo cùng cấp thư mục đầu vào), trả `CollectUnsignedResultDto.ParentPath` để FE mở. Không quét lại PDF (FE đã biết file nào chưa ký từ kết quả check).
 - **PackService** — builds EAD/METS XML (`System.Xml.Linq`), computes checksums, copies attachments + schemas, zips. **No DB writes.**

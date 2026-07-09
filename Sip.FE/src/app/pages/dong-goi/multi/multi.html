@@ -107,6 +107,7 @@
                           <th>Tên file</th>
                           <th style="width: 9rem">Trạng thái</th>
                           <th style="width: 9rem">Tình trạng</th>
+                          <th style="width: 13rem">Ký số</th>
                           <th>Nguyên nhân lỗi</th>
                         </tr>
                       </thead>
@@ -134,6 +135,29 @@
                                   </span>
                                 }
                                 @default { <span class="text-slate-300">—</span> }
+                              }
+                            </td>
+                            <!-- Ký số -->
+                            <td>
+                              @if (f.signature) {
+                                @if (f.signature.isSigned) {
+                                  <div class="flex flex-col gap-0.5">
+                                    <span class="inline-flex items-center gap-1 text-xs font-medium text-green-600">
+                                      <i class="pi pi-verified"></i> Đã ký
+                                    </span>
+                                    @for (s of f.signature.signers; track $index) {
+                                      <span class="text-[11px] leading-tight text-slate-600 break-all">
+                                        {{ s.signedBy || 'Không rõ người ký' }}@if (s.signedAt) {<span> · {{ s.signedAt }}</span>}
+                                      </span>
+                                    }
+                                  </div>
+                                } @else {
+                                  <span class="inline-flex items-center gap-1 text-xs font-medium text-amber-600">
+                                    <i class="pi pi-exclamation-circle"></i> Chưa ký
+                                  </span>
+                                }
+                              } @else {
+                                <span class="text-slate-300">—</span>
                               }
                             </td>
                             <td class="text-red-600">{{ f.reason }}</td>
@@ -171,6 +195,7 @@
   <app-package-multi-dialog
     [parentFolderPath]="folderPath()"
     [passedHoSoNames]="passedHoSoNames()"
+    [unsignedItems]="unsignedItems()"
     [(visible)]="showPackageDialog"
   />
 </div>

@@ -1,4 +1,4 @@
-import { Component, OnDestroy, inject, signal } from '@angular/core';
+import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { ProgressBarModule } from 'primeng/progressbar';
 import { TableModule } from 'primeng/table';
@@ -31,6 +31,11 @@ export class Check extends BaseComponent implements OnDestroy {
   percent = signal<number>(0);
   completed = signal<boolean>(false);
   fileRows = signal<IFileRow[]>([]);
+
+  // File chưa ký số (đã có thông tin ký số và isSigned=false) -> cảnh báo khi đóng gói.
+  unsignedFileNames = computed(() =>
+    this.fileRows().filter((r) => r.signature && !r.signature.isSigned).map((r) => r.name)
+  );
 
   // Dòng cuối: thông tin tổng kết hồ sơ
   hoSo = signal<{ status: 'processing' | 'ok' | 'error'; reason: string }>({
@@ -169,16 +174,24 @@ export class Check extends BaseComponent implements OnDestroy {
             {
               name: key,
               status: ev.status === 0 ? 'error' : 'ok',
-              reason: ev.status === 0 ? ev.message : undefined
+              reason: ev.status === 0 ? ev.message : undefined,
+              signature: ev.signature
             }
           ];
         }
         return rows;
       }
       const r = rows[idx];
-      if (r.status === 'error') return rows; // lỗi đầu tiên thắng
-      const updated: IFileRow =
-        ev.status === 0 ? { ...r, status: 'error', reason: ev.message } : { ...r, status: 'ok' };
+      // Gộp thông tin ký số nếu event mang theo (độc lập với trạng thái đúng/lỗi).
+      const base: IFileRow = ev.signature ? { ...r, signature: ev.signature } : r;
+      let updated: IFileRow;
+      if (base.status === 'error') {
+        updated = base; // lỗi đầu tiên thắng (chỉ nhận thêm signature)
+      } else if (ev.status === 0) {
+        updated = { ...base, status: 'error', reason: ev.message };
+      } else {
+        updated = { ...base, status: 'ok' };
+      }
       return rows.map((x, i) => (i === idx ? updated : x));
     });
   }

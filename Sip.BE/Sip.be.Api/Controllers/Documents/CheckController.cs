@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Sip.be.Api.Base;
 using Sip.be.Application.Document.Dtos.Check;
 using Sip.be.Application.Document.Interfaces;
+using Sip.be.Shared.Request;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 
@@ -67,6 +68,36 @@ namespace Sip.be.Api.Controllers.Documents
                 var json = JsonSerializer.Serialize(progress, jsonOptions);
                 await Response.WriteAsync($"data: {json}\n\n", HttpContext.RequestAborted);
                 await Response.Body.FlushAsync(HttpContext.RequestAborted);
+            }
+        }
+
+        // Gom các file CHƯA KÝ SỐ của 1 hồ sơ vào thư mục "chưa ký số_{date}" (cùng cấp thư mục hồ sơ) để người dùng xem.
+        [HttpPost("collect-unsigned")]
+        public async Task<ApiResponse> CollectUnsigned(CollectUnsignedRequestDto input)
+        {
+            try
+            {
+                var result = await _checkService.CollectUnsignedFilesAsync(input, HttpContext.RequestAborted);
+                return new(result);
+            }
+            catch (Exception ex)
+            {
+                return OkException(ex);
+            }
+        }
+
+        // Gom file CHƯA KÝ SỐ của NHIỀU hồ sơ vào thư mục "chưa ký số_{date}" (mỗi hồ sơ 1 thư mục con) để người dùng xem.
+        [HttpPost("collect-unsigned-multi")]
+        public async Task<ApiResponse> CollectUnsignedMulti(CollectUnsignedMultiRequestDto input)
+        {
+            try
+            {
+                var result = await _checkService.CollectUnsignedMultiAsync(input, HttpContext.RequestAborted);
+                return new(result);
+            }
+            catch (Exception ex)
+            {
+                return OkException(ex);
             }
         }
     }

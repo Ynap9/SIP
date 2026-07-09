@@ -11,6 +11,7 @@ using Sip.be.infratructure.Persistence;
 using Sip.be.Shared.Constants.Check;
 using Sip.be.Shared.Constants.Documents;
 using Sip.be.Shared.Request;
+using Sip.be.Shared.Request.AppException;
 using Sip.be.Shared.Request.ErrorRequest;
 using System;
 using System.Collections.Concurrent;
@@ -260,6 +261,8 @@ namespace Sip.be.Application.Document.Implements
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     var fileName = Path.GetFileName(file);
+                    // Đọc chữ ký số của file để gắn kèm event (thông tin hiển thị, không tính là lỗi).
+                    var signature = PdfSignatureReader.Read(file);
                     if (!CheckConstants.AllowedAttachmentExtensions.Contains(Path.GetExtension(file)))
                     {
                         errorCount++;
@@ -271,7 +274,8 @@ namespace Sip.be.Application.Document.Implements
                             Target = fileName,
                             Status = StatusCodeE.Error,
                             Code = ErrorCodes.AttachmentInvalidType,
-                            Message = $"File '{fileName}' có định dạng không được hỗ trợ (chỉ chấp nhận PDF, hình ảnh, âm thanh, phim)."
+                            Message = $"File '{fileName}' có định dạng không được hỗ trợ (chỉ chấp nhận PDF, hình ảnh, âm thanh, phim).",
+                            Signature = signature
                         };
                     }
                     else
@@ -284,7 +288,8 @@ namespace Sip.be.Application.Document.Implements
                             Target = fileName,
                             Status = StatusCodeE.Success,
                             Code = 200,
-                            Message = "Định dạng file đính kèm hợp lệ."
+                            Message = "Định dạng file đính kèm hợp lệ.",
+                            Signature = signature
                         };
                     }
                 }
@@ -422,7 +427,7 @@ namespace Sip.be.Application.Document.Implements
                 }
 
                 // 2.2 Mã định danh tài liệu khớp với tên file đính kèm (không thừa, không thiếu)
-                if (!vanBanColumns.TryGetValue(EadFieldMapping.NormalizeHeader(CheckConstants.ColMaLuuTruTaiLieu), out var maTaiLieuCol))
+                if (!vanBanColumns.TryGetValue(EadFieldMapping.NormalizeHeader(CheckConstants.ColMaDinhDanhTaiLieu), out var maTaiLieuCol))
                 {
                     errorCount++;
                     yield return new CheckProgressDto
@@ -430,10 +435,10 @@ namespace Sip.be.Application.Document.Implements
                         Stage = (int)CheckStage.CodeMatching,
                         StageName = CheckConstants.StageNameCodeMatching,
                         TargetType = CheckConstants.TargetTypeCode,
-                        Target = CheckConstants.ColMaLuuTruTaiLieu,
+                        Target = CheckConstants.ColMaDinhDanhTaiLieu,
                         Status = StatusCodeE.Error,
                         Code = ErrorCodes.ColumnMissing,
-                        Message = $"Sheet '{CheckConstants.SheetVanBan}' thiếu cột '{CheckConstants.ColMaLuuTruTaiLieu}'."
+                        Message = $"Sheet '{CheckConstants.SheetVanBan}' thiếu cột '{CheckConstants.ColMaDinhDanhTaiLieu}'."
                     };
                 }
                 else
@@ -671,7 +676,7 @@ namespace Sip.be.Application.Document.Implements
                     foreach (var row in vanBanDataRows)
                     {
                         rowIndex++;
-                        var rowLabel = vanBanColumns.TryGetValue(EadFieldMapping.NormalizeHeader(CheckConstants.ColMaLuuTruTaiLieu), out var idCol)
+                        var rowLabel = vanBanColumns.TryGetValue(EadFieldMapping.NormalizeHeader(CheckConstants.ColMaDinhDanhTaiLieu), out var idCol)
                             ? row.Cell(idCol).GetString().Trim()
                             : string.Empty;
                         if (string.IsNullOrWhiteSpace(rowLabel)) rowLabel = $"Dòng {rowIndex}";
@@ -1157,10 +1162,15 @@ namespace Sip.be.Application.Document.Implements
 
             var attachmentFiles = Directory.GetFiles(attachmentDir);
             result.FileCount = attachmentFiles.Length;
-            // Seed 1 dòng/file (mặc định Success); các bước sau đánh dấu lỗi vào đúng file.
+            // Seed 1 dòng/file (mặc định Success) kèm thông tin ký số; các bước sau đánh dấu lỗi vào đúng file.
             foreach (var f in attachmentFiles)
             {
-                result.Files.Add(new FileCheckResultDto { Name = Path.GetFileName(f), Status = StatusCodeE.Success });
+                result.Files.Add(new FileCheckResultDto
+                {
+                    Name = Path.GetFileName(f),
+                    Status = StatusCodeE.Success,
+                    Signature = PdfSignatureReader.Read(f)
+                });
             }
             if (attachmentFiles.Length == 0)
             {
@@ -1223,9 +1233,9 @@ namespace Sip.be.Application.Document.Implements
                     }
                 }
 
-                if (!vanBanColumns.TryGetValue(EadFieldMapping.NormalizeHeader(CheckConstants.ColMaLuuTruTaiLieu), out var maTaiLieuCol))
+                if (!vanBanColumns.TryGetValue(EadFieldMapping.NormalizeHeader(CheckConstants.ColMaDinhDanhTaiLieu), out var maTaiLieuCol))
                 {
-                    result.Errors.Add($"Sheet '{CheckConstants.SheetVanBan}' thiếu cột '{CheckConstants.ColMaLuuTruTaiLieu}'.");
+                    result.Errors.Add($"Sheet '{CheckConstants.SheetVanBan}' thiếu cột '{CheckConstants.ColMaDinhDanhTaiLieu}'.");
                 }
                 else
                 {
@@ -1272,7 +1282,7 @@ namespace Sip.be.Application.Document.Implements
                     foreach (var row in vanBanDataRows)
                     {
                         rowIndex++;
-                        var rowLabel = vanBanColumns.TryGetValue(EadFieldMapping.NormalizeHeader(CheckConstants.ColMaLuuTruTaiLieu), out var idCol)
+                        var rowLabel = vanBanColumns.TryGetValue(EadFieldMapping.NormalizeHeader(CheckConstants.ColMaDinhDanhTaiLieu), out var idCol)
                             ? row.Cell(idCol).GetString().Trim()
                             : string.Empty;
                         if (string.IsNullOrWhiteSpace(rowLabel)) rowLabel = $"Dòng {rowIndex}";
@@ -1476,7 +1486,7 @@ namespace Sip.be.Application.Document.Implements
             var orphanDocs = new List<string>();
             foreach (var row in data.VanBanRows)
             {
-                var maLuuTru = GetCellValue(row, CheckConstants.ColMaLuuTruTaiLieu);
+                var maLuuTru = GetCellValue(row, CheckConstants.ColMaDinhDanhTaiLieu);
                 if (string.IsNullOrWhiteSpace(maLuuTru)) continue;
                 var owner = folderNames
                     .Where(n => maLuuTru.StartsWith(n + ".", StringComparison.OrdinalIgnoreCase))
@@ -1720,8 +1730,8 @@ namespace Sip.be.Application.Document.Implements
 
                 if (!hoSoColumns.ContainsKey(EadFieldMapping.NormalizeHeader(CheckConstants.ColMaHoSo)))
                     return (false, ErrorCodes.ColumnMissing, $"Sheet '{CheckConstants.SheetHoSo}' thiếu cột '{CheckConstants.ColMaHoSo}'.", null);
-                if (!vanBanColumns.ContainsKey(EadFieldMapping.NormalizeHeader(CheckConstants.ColMaLuuTruTaiLieu)))
-                    return (false, ErrorCodes.ColumnMissing, $"Sheet '{CheckConstants.SheetVanBan}' thiếu cột '{CheckConstants.ColMaLuuTruTaiLieu}'.", null);
+                if (!vanBanColumns.ContainsKey(EadFieldMapping.NormalizeHeader(CheckConstants.ColMaDinhDanhTaiLieu)))
+                    return (false, ErrorCodes.ColumnMissing, $"Sheet '{CheckConstants.SheetVanBan}' thiếu cột '{CheckConstants.ColMaDinhDanhTaiLieu}'.", null);
 
                 var data = new SharedExcelData
                 {
@@ -1780,10 +1790,15 @@ namespace Sip.be.Application.Document.Implements
 
             var dataFiles = Directory.GetFiles(folderPath);
             result.FileCount = dataFiles.Length;
-            // Seed 1 dòng/file (mặc định Success); các bước sau đánh dấu lỗi vào đúng file.
+            // Seed 1 dòng/file (mặc định Success) kèm thông tin ký số; các bước sau đánh dấu lỗi vào đúng file.
             foreach (var f in dataFiles)
             {
-                result.Files.Add(new FileCheckResultDto { Name = Path.GetFileName(f), Status = StatusCodeE.Success });
+                result.Files.Add(new FileCheckResultDto
+                {
+                    Name = Path.GetFileName(f),
+                    Status = StatusCodeE.Success,
+                    Signature = PdfSignatureReader.Read(f)
+                });
             }
 
             if (dataFiles.Length == 0)
@@ -1811,7 +1826,7 @@ namespace Sip.be.Application.Document.Implements
 
             // Khớp mã lưu trữ tài liệu <-> tên file (trong phạm vi hồ sơ này)
             var maTaiLieuSet = new HashSet<string>(
-                vanBanRows.Select(r => GetCellValue(r, CheckConstants.ColMaLuuTruTaiLieu)).Where(v => !string.IsNullOrWhiteSpace(v)),
+                vanBanRows.Select(r => GetCellValue(r, CheckConstants.ColMaDinhDanhTaiLieu)).Where(v => !string.IsNullOrWhiteSpace(v)),
                 StringComparer.OrdinalIgnoreCase);
             var fileNameSet = new HashSet<string>(dataFiles.Select(Path.GetFileNameWithoutExtension), StringComparer.OrdinalIgnoreCase);
 
@@ -1850,7 +1865,7 @@ namespace Sip.be.Application.Document.Implements
                 foreach (var row in vanBanRows)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    var rowLabel = GetCellValue(row, CheckConstants.ColMaLuuTruTaiLieu);
+                    var rowLabel = GetCellValue(row, CheckConstants.ColMaDinhDanhTaiLieu);
                     if (string.IsNullOrWhiteSpace(rowLabel)) rowLabel = "Dòng không có mã lưu trữ";
 
                     var rowErrors = new List<string>();
@@ -1902,6 +1917,119 @@ namespace Sip.be.Application.Document.Implements
             {
                 errors.Add($"{prefix}: trường '{truongThongTin}' có giá trị '{value}' không hợp lệ theo mô tả.");
             }
+        }
+
+        // =====================================================================
+        // ============== GOM FILE CHƯA KÝ SỐ (để người dùng xem) ==============
+        // =====================================================================
+
+        public Task<CollectUnsignedResultDto> CollectUnsignedFilesAsync(CollectUnsignedRequestDto input, CancellationToken cancellationToken = default)
+        {
+            _logger.LogInformation($"{nameof(CollectUnsignedFilesAsync)}, folderPath = {input?.FolderPath}");
+
+            var folderPath = input?.FolderPath?.Trim();
+            if (string.IsNullOrWhiteSpace(folderPath) || !Directory.Exists(folderPath))
+            {
+                throw new UserFriendlyException(ErrorCodes.FolderNotFound, $"Không tìm thấy thư mục hồ sơ: '{folderPath}'.");
+            }
+
+            var fileNames = new HashSet<string>(input!.FileNames ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
+            if (fileNames.Count == 0)
+            {
+                throw new UserFriendlyException(ErrorCodes.BadRequest, "Không có file chưa ký số nào để gom.");
+            }
+
+            var parentDir = CreateUnsignedParent(folderPath);
+            var hoSoName = new DirectoryInfo(folderPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)).Name;
+            var count = CopyUnsignedForHoSo(folderPath, hoSoName, fileNames, parentDir);
+
+            return Task.FromResult(new CollectUnsignedResultDto
+            {
+                ParentPath = parentDir,
+                HoSoCount = count > 0 ? 1 : 0,
+                FileCount = count,
+                Message = $"Đã gom {count} file chưa ký số."
+            });
+        }
+
+        public Task<CollectUnsignedResultDto> CollectUnsignedMultiAsync(CollectUnsignedMultiRequestDto input, CancellationToken cancellationToken = default)
+        {
+            _logger.LogInformation($"{nameof(CollectUnsignedMultiAsync)}, parentFolderPath = {input?.ParentFolderPath}");
+
+            var parentPath = input?.ParentFolderPath?.Trim();
+            if (string.IsNullOrWhiteSpace(parentPath) || !Directory.Exists(parentPath))
+            {
+                throw new UserFriendlyException(ErrorCodes.ParentFolderNotFound, $"Không tìm thấy thư mục cha: '{parentPath}'.");
+            }
+
+            var items = (input!.Items ?? new List<CollectUnsignedItemDto>())
+                .Where(i => !string.IsNullOrWhiteSpace(i.HoSoName) && i.FileNames is { Count: > 0 })
+                .ToList();
+            if (items.Count == 0)
+            {
+                throw new UserFriendlyException(ErrorCodes.BadRequest, "Không có file chưa ký số nào để gom.");
+            }
+
+            var parentDir = CreateUnsignedParent(parentPath);
+            var hoSoCount = 0;
+            var fileCount = 0;
+            foreach (var item in items)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var hoSoFolder = Path.Combine(parentPath, item.HoSoName);
+                if (!Directory.Exists(hoSoFolder)) continue;
+                var names = new HashSet<string>(item.FileNames, StringComparer.OrdinalIgnoreCase);
+                var copied = CopyUnsignedForHoSo(hoSoFolder, item.HoSoName, names, parentDir);
+                if (copied > 0)
+                {
+                    hoSoCount++;
+                    fileCount += copied;
+                }
+            }
+
+            return Task.FromResult(new CollectUnsignedResultDto
+            {
+                ParentPath = parentDir,
+                HoSoCount = hoSoCount,
+                FileCount = fileCount,
+                Message = $"Đã gom {fileCount} file chưa ký số của {hoSoCount} hồ sơ."
+            });
+        }
+
+        /// <summary>Tạo thư mục cha "chưa ký số_{yyyyMMdd_HHmmss}" cùng cấp với thư mục đầu vào.</summary>
+        private static string CreateUnsignedParent(string inputFolder)
+        {
+            var trimmed = inputFolder.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var baseDir = Path.GetDirectoryName(trimmed);
+            if (string.IsNullOrEmpty(baseDir)) baseDir = trimmed; // fallback (vd gốc ổ đĩa)
+            var parent = Path.Combine(baseDir, $"chưa ký số_{DateTime.Now:yyyyMMdd_HHmmss}");
+            Directory.CreateDirectory(parent);
+            return parent;
+        }
+
+        /// <summary>Copy các file (theo tên) của 1 hồ sơ vào "{parentDir}/{hoSoName}_chưa ký số/". Trả số file đã copy.</summary>
+        private static int CopyUnsignedForHoSo(string hoSoFolder, string hoSoName, HashSet<string> fileNames, string parentDir)
+        {
+            var matched = GetDataFiles(hoSoFolder)
+                .Where(f => fileNames.Contains(Path.GetFileName(f)))
+                .ToList();
+            if (matched.Count == 0) return 0;
+
+            var sub = Path.Combine(parentDir, $"{hoSoName}_chưa ký số");
+            Directory.CreateDirectory(sub);
+            foreach (var f in matched)
+            {
+                File.Copy(f, Path.Combine(sub, Path.GetFileName(f)), true);
+            }
+            return matched.Count;
+        }
+
+        /// <summary>File dữ liệu của 1 hồ sơ: có thư mục 'attachment' thì lấy trong đó (loại 1), ngược lại lấy trực tiếp (loại 2/3).</summary>
+        private static string[] GetDataFiles(string hoSoFolder)
+        {
+            var attachmentDir = Directory.GetDirectories(hoSoFolder)
+                .FirstOrDefault(d => string.Equals(new DirectoryInfo(d).Name, CheckConstants.AttachmentFolderName, StringComparison.OrdinalIgnoreCase));
+            return attachmentDir != null ? Directory.GetFiles(attachmentDir) : Directory.GetFiles(hoSoFolder);
         }
     }
 }

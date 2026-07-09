@@ -1,4 +1,7 @@
 // DTO khớp MultiCheckProgressDto (BE) — mỗi event SSE của luồng kiểm tra NHIỀU hồ sơ.
+import { ISignatureInfo } from './check.models';
+
+export type { ISignatureInfo, ISignerInfo, ICollectUnsignedResult } from './check.models';
 
 // Kết quả kiểm tra 1 file trong hồ sơ (khớp FileCheckResultDto).
 export interface IFileCheckResult {
@@ -6,6 +9,8 @@ export interface IFileCheckResult {
   /** 1 = ok, 0 = error */
   status: number;
   reason?: string;
+  /** Thông tin ký số của file. */
+  signature?: ISignatureInfo;
 }
 
 export interface IMultiCheckProgress {
@@ -37,6 +42,14 @@ export interface IFileRow {
   name: string;
   status: 'processing' | 'ok' | 'error';
   reason?: string;
+  /** Thông tin ký số của file (để hiển thị cột "Ký số"). */
+  signature?: ISignatureInfo;
+}
+
+// 1 hồ sơ con kèm danh sách tên file chưa ký số (gửi BE để gom).
+export interface ICollectUnsignedItem {
+  hoSoName: string;
+  fileNames: string[];
 }
 
 // 1 dòng hồ sơ (cha) trong bảng; `status` vừa suy ra Trạng thái (đã xử lý) vừa Tình trạng (đạt/lỗi).

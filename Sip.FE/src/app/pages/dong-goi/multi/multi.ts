@@ -7,7 +7,7 @@ import { BaseComponent } from '../../../shared/components/base/base-component';
 import { Utils } from '../../../shared/utils';
 import { MultiCheckService } from '../../../services/multi-check.service';
 import { DesktopService } from '../../../services/desktop.service';
-import { IMultiCheckProgress, IHoSoRow, IFileRow } from '../../../models/multi-check.models';
+import { IMultiCheckProgress, IHoSoRow, IFileRow, ICollectUnsignedItem } from '../../../models/multi-check.models';
 import { PackageMultiDialog } from './package-multi-dialog/package-multi-dialog';
 
 @Component({
@@ -33,6 +33,17 @@ export class Multi extends BaseComponent implements OnDestroy {
 
   // Hồ sơ đã đạt -> allowlist gửi khi đóng gói (chỉ gói hồ sơ pass).
   passedHoSoNames = computed(() => this.hoSoRows().filter((r) => r.status === 'ok').map((r) => r.name));
+
+  // File chưa ký số theo từng hồ sơ ĐẠT (để cảnh báo + gom khi đóng gói).
+  unsignedItems = computed<ICollectUnsignedItem[]>(() =>
+    this.hoSoRows()
+      .filter((r) => r.status === 'ok')
+      .map((r) => ({
+        hoSoName: r.name,
+        fileNames: r.files.filter((f) => f.signature && !f.signature.isSigned).map((f) => f.name)
+      }))
+      .filter((i) => i.fileNames.length > 0)
+  );
 
   private sub?: Subscription;
 
@@ -137,7 +148,8 @@ export class Multi extends BaseComponent implements OnDestroy {
     const files: IFileRow[] = (ev.files ?? []).map((f) => ({
       name: f.name,
       status: f.status === 0 ? 'error' : 'ok',
-      reason: f.status === 0 ? f.reason : undefined
+      reason: f.status === 0 ? f.reason : undefined,
+      signature: f.signature
     }));
     const status: IHoSoRow['status'] = ev.status === 0 ? 'error' : 'ok';
     const reason = ev.status === 0 ? (ev.errors?.join(' | ') || ev.message) : undefined;

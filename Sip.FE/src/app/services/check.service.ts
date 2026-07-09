@@ -1,13 +1,27 @@
 import { Injectable, inject } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { ICheckProgress } from '../models/check.models';
+import { ICheckProgress, ICollectUnsignedResult } from '../models/check.models';
+import { IBaseResponseWithData } from '../shared/models/request-paging.base.models';
 import { DesktopService } from './desktop.service';
 
 @Injectable({ providedIn: 'root' })
 export class CheckService {
   private desktop = inject(DesktopService);
+  private http = inject(HttpClient);
   private get base() {
     return this.desktop.apiBase;
+  }
+
+  /**
+   * Gom các file CHƯA KÝ SỐ của 1 hồ sơ vào thư mục "chưa ký số_{date}" (cùng cấp thư mục hồ sơ).
+   * Trả về đường dẫn thư mục cha để FE mở cho người dùng xem.
+   */
+  collectUnsigned(folderPath: string, fileNames: string[]): Observable<IBaseResponseWithData<ICollectUnsignedResult>> {
+    return this.http.post<IBaseResponseWithData<ICollectUnsignedResult>>(
+      `${this.base}/api/core/document/check/collect-unsigned`,
+      { folderPath, fileNames }
+    );
   }
 
   /**

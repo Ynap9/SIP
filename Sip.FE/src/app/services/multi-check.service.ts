@@ -1,13 +1,30 @@
 import { Injectable, inject } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { IMultiCheckProgress } from '../models/multi-check.models';
+import { IMultiCheckProgress, ICollectUnsignedItem, ICollectUnsignedResult } from '../models/multi-check.models';
+import { IBaseResponseWithData } from '../shared/models/request-paging.base.models';
 import { DesktopService } from './desktop.service';
 
 @Injectable({ providedIn: 'root' })
 export class MultiCheckService {
   private desktop = inject(DesktopService);
+  private http = inject(HttpClient);
   private get base() {
     return this.desktop.apiBase;
+  }
+
+  /**
+   * Gom file CHƯA KÝ SỐ của NHIỀU hồ sơ vào thư mục "chưa ký số_{date}" (mỗi hồ sơ 1 thư mục con).
+   * Trả về đường dẫn thư mục cha để FE mở cho người dùng xem.
+   */
+  collectUnsignedMulti(
+    parentFolderPath: string,
+    items: ICollectUnsignedItem[]
+  ): Observable<IBaseResponseWithData<ICollectUnsignedResult>> {
+    return this.http.post<IBaseResponseWithData<ICollectUnsignedResult>>(
+      `${this.base}/api/core/document/check/collect-unsigned-multi`,
+      { parentFolderPath, items }
+    );
   }
 
   /**

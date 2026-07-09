@@ -43,3 +43,7 @@ All branches log via `ILogger` with request path + query. **Do not** hand-craft 
 - Disables response buffering (`IHttpResponseBodyFeature.DisableBuffering()`) for realtime push.
 - Iterates `await foreach (var p in _checkService.CheckHoSoFolderAsync(input, HttpContext.RequestAborted))`, serializes each event as **camelCase** JSON and writes `data: {json}\n\n`, then flushes.
 - Always thread `HttpContext.RequestAborted` so the client cancelling stops the work.
+
+## Non-SSE actions on CheckController
+Besides the two SSE streams, `CheckController` also exposes standard `ApiResponse` actions (try/catch → `OkException`):
+- `POST check/collect-unsigned` (single) and `POST check/collect-unsigned-multi` (multi) — gom các file **chưa ký số** vào một thư mục `chưa ký số_{date}` để người dùng xem; trả `CollectUnsignedResultDto` (đường dẫn thư mục cha). FE gọi rồi `DesktopService.openPath(parentPath)`.

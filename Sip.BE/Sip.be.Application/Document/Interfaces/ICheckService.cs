@@ -1,6 +1,7 @@
 using Sip.be.Application.Document.Dtos.Check;
 using System.Collections.Generic;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace Sip.be.Application.Document.Interfaces
 {
@@ -23,5 +24,18 @@ namespace Sip.be.Application.Document.Interfaces
         /// Mỗi hồ sơ xử lý xong yield 1 MultiCheckProgressDto; event cuối là tổng kết toàn batch.
         /// </summary>
         IAsyncEnumerable<MultiCheckProgressDto> CheckMultiFolderAsync(CheckMultiFolderRequestDto input, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gom các file CHƯA KÝ SỐ của 1 hồ sơ (single) vào thư mục "chưa ký số_{date}/{Mã hồ sơ}_chưa ký số"
+        /// (tạo cùng cấp với thư mục hồ sơ đầu vào). Trả về đường dẫn thư mục cha để FE mở cho người dùng xem.
+        /// FE truyền sẵn danh sách tên file chưa ký (đã biết từ kết quả check) nên BE chỉ copy, không quét lại PDF.
+        /// </summary>
+        Task<CollectUnsignedResultDto> CollectUnsignedFilesAsync(CollectUnsignedRequestDto input, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gom file CHƯA KÝ SỐ của NHIỀU hồ sơ trong 1 thư mục cha vào "chưa ký số_{date}", mỗi hồ sơ 1 thư mục con
+        /// "{Mã hồ sơ}_chưa ký số" (tạo cùng cấp với thư mục cha đầu vào). Trả về đường dẫn thư mục cha để FE mở.
+        /// </summary>
+        Task<CollectUnsignedResultDto> CollectUnsignedMultiAsync(CollectUnsignedMultiRequestDto input, CancellationToken cancellationToken = default);
     }
 }

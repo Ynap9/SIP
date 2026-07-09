@@ -44,6 +44,7 @@
           <th style="text-align: center">Tên file (mã lưu trữ tài liệu)</th>
           <th style="width: 9rem; text-align: center">Trạng thái</th>
           <th style="width: 9rem; text-align: center">Tình trạng</th>
+          <th style="width: 13rem; text-align: center">Ký số</th>
           <th style="text-align: center">Nguyên nhân lỗi</th>
         </tr>
       </ng-template>
@@ -84,6 +85,30 @@
             }
           </td>
 
+          <!-- Ký số: đã ký (kèm người ký + thời gian) / chưa ký / đang xử lý -->
+          <td style="text-align: center">
+            @if (row.signature) {
+              @if (row.signature.isSigned) {
+                <div class="flex flex-col items-center gap-0.5">
+                  <span class="inline-flex items-center gap-1 text-xs font-medium text-green-600">
+                    <i class="pi pi-verified"></i> Đã ký
+                  </span>
+                  @for (s of row.signature.signers; track $index) {
+                    <span class="text-[11px] leading-tight text-slate-600 break-all">
+                      {{ s.signedBy || 'Không rõ người ký' }}@if (s.signedAt) {<span> · {{ s.signedAt }}</span>}
+                    </span>
+                  }
+                </div>
+              } @else {
+                <span class="inline-flex items-center gap-1 text-xs font-medium text-amber-600">
+                  <i class="pi pi-exclamation-circle"></i> Chưa ký
+                </span>
+              }
+            } @else {
+              <span class="text-slate-300">—</span>
+            }
+          </td>
+
           <td style="text-align: center" class="text-red-600">{{ row.reason }}</td>
         </tr>
       </ng-template>
@@ -119,6 +144,7 @@
               }
             }
           </td>
+          <td style="text-align: center"><span class="text-slate-300">—</span></td>
           <td style="text-align: center" [class.text-red-600]="hoSo().status === 'error'">
             {{ hoSo().reason }}
           </td>
@@ -142,5 +168,9 @@
   </div>
 
   <!-- Popup đóng gói -->
-  <app-package-dialog [folderPath]="folderPath()" [(visible)]="showPackageDialog" />
+  <app-package-dialog
+    [folderPath]="folderPath()"
+    [unsignedFileNames]="unsignedFileNames()"
+    [(visible)]="showPackageDialog"
+  />
 </div>

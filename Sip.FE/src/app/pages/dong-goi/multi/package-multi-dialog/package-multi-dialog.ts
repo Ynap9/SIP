@@ -1,12 +1,14 @@
-import { Component, inject, input, model, signal } from '@angular/core';
+import { Component, computed, inject, input, model, signal } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { ProgressBarModule } from 'primeng/progressbar';
 
 import { SharedImports } from '../../../../shared/import.shared';
 import { BaseComponent } from '../../../../shared/components/base/base-component';
 import { MultiPackService } from '../../../../services/multi-pack.service';
+import { MultiCheckService } from '../../../../services/multi-check.service';
 import { DesktopService } from '../../../../services/desktop.service';
 import { IMultiPackProgress, IMultiPackRequest } from '../../../../models/multi-pack.models';
+import { ICollectUnsignedItem } from '../../../../models/multi-check.models';
 
 interface IZipResult {
   hoSoName: string;
@@ -21,12 +23,18 @@ interface IZipResult {
 })
 export class PackageMultiDialog extends BaseComponent {
   private multiPackService = inject(MultiPackService);
+  private multiCheckService = inject(MultiCheckService);
   protected desktop = inject(DesktopService);
 
   // Thư mục cha + danh sách hồ sơ đã đạt (allowlist) + trạng thái hiển thị (two-way với cha)
   parentFolderPath = input<string>('');
   passedHoSoNames = input<string[]>([]);
+  // File chưa ký số theo từng hồ sơ đạt (để cảnh báo + gom khi đóng gói)
+  unsignedItems = input<ICollectUnsignedItem[]>([]);
   visible = model<boolean>(false);
+
+  collecting = signal<boolean>(false);
+  unsignedCount = computed(() => this.unsignedItems().reduce((sum, i) => sum + i.fileNames.length, 0));
 
   // Field nhập (số luồng song song KHÔNG cho nhập -> BE tự tính theo số nhân CPU của máy)
   maPhong = signal<string>('');
@@ -108,6 +116,25 @@ export class PackageMultiDialog extends BaseComponent {
 
   closeSuccess(): void {
     this.showSuccess.set(false);
+  }
+
+  /** Gom file chưa ký số của các hồ sơ đạt vào thư mục "chưa ký số_{date}" rồi mở cho người dùng xem. */
+  onViewUnsigned(): void {
+    const items = this.unsignedItems();
+    if (!items.length || this.collecting()) return;
+    this.collecting.set(true);
+    this.multiCheckService.collectUnsignedMulti(this.parentFolderPath(), items).subscribe({
+      next: (res) => {
+        this.collecting.set(false);
+        if (this.isResponseSucceed(res)) {
+          this.openFolder(res.data.parentPath);
+        }
+      },
+      error: () => {
+        this.collecting.set(false);
+        this.messageError('Không gom được file chưa ký số. Vui lòng thử lại.');
+      }
+    });
   }
 
   /** Mở thư mục/file kết quả: desktop -> Explorer; web-dev -> copy clipboard. */

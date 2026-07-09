@@ -54,5 +54,8 @@ namespace Sip.be.Application.Document.Dtos.Check
 
         /// <summary>Danh sách tên file đính kèm (chỉ có ở event manifest đầu giai đoạn 1) để FE seed sẵn các dòng file.</summary>
         public List<string>? Files { get; set; }
+
+        /// <summary>Thông tin ký số của file (chỉ có ở event kiểm tra 1 file đính kèm, giai đoạn 1).</summary>
+        public SignatureInfoDto? Signature { get; set; }
     }
 }

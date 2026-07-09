@@ -16,6 +16,9 @@ namespace Sip.be.Shared.Constants.Check
         public const string SheetHoSo = "Ho_so";
         public const string SheetVanBan = "Van_ban";
 
+        // Cột dùng để KHỚP với tên file đính kèm: tên file = mã định danh tài liệu (docId), vd "H49...160.1".
+        public const string ColMaDinhDanhTaiLieu = "Mã định danh tài liệu";
+
         // Tên cột (header) dùng để đối chiếu mã
         public const string ColMaHoSo = "Mã hồ sơ";
         public const string ColMaLuuTruTaiLieu = "Mã lưu trữ của tài liệu";
