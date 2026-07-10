@@ -1,6 +1,6 @@
 <div align="center">
 
-# SIPPACK
+# 📦 SIPPACK
 
 ### Hệ thống kiểm tra & đóng gói tài liệu lưu trữ chuẩn SIP
 
@@ -8,13 +8,7 @@
 
 _SIPPACK by **SaoMaiSolutions**_
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![.NET 9](https://img.shields.io/badge/.NET-9.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
-[![Angular 21](https://img.shields.io/badge/Angular-21-DD0031?logo=angular&logoColor=white)](https://angular.dev/)
-[![PrimeNG 21](https://img.shields.io/badge/PrimeNG-21-007AD9)](https://primeng.org/)
-[![SQLite](https://img.shields.io/badge/SQLite-DB-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
-[![Desktop: Photino](https://img.shields.io/badge/Desktop-Photino%20%2B%20WebView2-2C2C2C)](https://www.tryphotino.io/)
-[![TT05/2025/TT--BNV](https://img.shields.io/badge/Chu%E1%BA%A9n-TT05%2F2025%2FTT--BNV-2E7D32)](./docs/chuan-dong-goi-sip-tt05.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE) [![.NET 9](https://img.shields.io/badge/.NET-9.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/) [![Angular 21](https://img.shields.io/badge/Angular-21-DD0031?logo=angular&logoColor=white)](https://angular.dev/) [![PrimeNG 21](https://img.shields.io/badge/PrimeNG-21-007AD9)](https://primeng.org/) [![SQLite](https://img.shields.io/badge/SQLite-DB-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org/) [![Desktop: Photino](https://img.shields.io/badge/Desktop-Photino%20%2B%20WebView2-2C2C2C)](https://www.tryphotino.io/) [![TT05/2025/TT--BNV](https://img.shields.io/badge/Chu%E1%BA%A9n-TT05%2F2025%2FTT--BNV-2E7D32)](./docs/chuan-dong-goi-sip-tt05.md)
 
 </div>
 
@@ -313,6 +307,6 @@ Dự án được phát hành theo giấy phép **MIT** — xem chi tiết tại
 
 <div align="center">
 
-**[Về đầu trang](#sippack)**
+**[Về đầu trang](#-sippack)**
 
 </div>
