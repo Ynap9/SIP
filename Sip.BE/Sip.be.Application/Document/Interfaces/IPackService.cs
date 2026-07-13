@@ -18,8 +18,10 @@ namespace Sip.be.Application.Document.Interfaces
 
         /// <summary>
         /// Đóng gói NHIỀU hồ sơ trong 1 thư mục CHA, stream tiến trình theo từng hồ sơ (cho SSE).
-        /// BE tạo 1 thư mục cha output "{tên thư mục cha}_{timestamp}" bên trong OutputPath, mỗi hồ sơ
-        /// đóng thành 1 file ZIP đặt vào đó (chạy song song, giới hạn luồng). Nạp config 1 lần trước khi
+        /// Tự nhận diện cả 3 cấu trúc như CheckService: loại 1 (mỗi hồ sơ có metadata/ + attachment/) và loại 2/3
+        /// (file data trực tiếp trong hồ sơ + 1 Excel dùng CHUNG ở thư mục cha / parent/metadata) — chọn nhánh qua
+        /// ResolveSharedExcelPath. BE tạo 1 thư mục cha output "{tên thư mục cha}_{timestamp}" bên trong OutputPath,
+        /// mỗi hồ sơ đóng thành 1 file ZIP đặt vào đó (chạy song song, giới hạn luồng). Nạp config 1 lần trước khi
         /// chia luồng; hồ sơ nào lỗi thì đánh dấu lỗi và vẫn tiếp tục các hồ sơ còn lại.
         /// Mỗi hồ sơ đóng xong yield 1 MultiPackProgressDto; event cuối là tổng kết toàn batch.
         /// </summary>

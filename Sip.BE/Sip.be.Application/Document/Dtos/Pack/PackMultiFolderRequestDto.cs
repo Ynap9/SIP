@@ -4,9 +4,10 @@ namespace Sip.be.Application.Document.Dtos.Pack
 {
     /// <summary>
     /// Request đóng gói NHIỀU hồ sơ cùng lúc.
-    /// Đầu vào là 1 thư mục CHA chứa nhiều thư mục hồ sơ con (đã qua kiểm tra); mỗi hồ sơ con có
-    /// metadata/ (file Excel Ho_so/Van_ban) + attachment/ (tài liệu thật) như luồng đóng gói 1 hồ sơ.
-    /// Mỗi hồ sơ được đóng thành 1 file ZIP riêng, đặt trong 1 thư mục cha output do BE tạo.
+    /// Đầu vào là 1 thư mục CHA chứa nhiều thư mục hồ sơ con (đã qua kiểm tra). BE tự nhận diện cấu trúc (khớp
+    /// CheckService): loại 1 = mỗi hồ sơ con có metadata/ (Excel Ho_so/Van_ban) + attachment/; loại 2/3 = file
+    /// data nằm TRỰC TIẾP trong hồ sơ con và dùng CHUNG 1 Excel ở thư mục cha (loại 2) hoặc trong parent/metadata
+    /// (loại 3). Mỗi hồ sơ được đóng thành 1 file ZIP riêng, đặt trong 1 thư mục cha output do BE tạo.
     /// </summary>
     public class PackMultiFolderRequestDto
     {
