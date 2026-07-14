@@ -14,6 +14,8 @@ chain to a pinned root** makes the time trustworthy.
 
 ## 2. Trust anchor (pin this — the feature hinges on it)
 A timestamp token embeds its full TSA chain, so verification is **fully offline** once the root is pinned.
+The full set of shipped G2 certs (Root + Party/State intermediates) and how they wire in:
+[ca-trust-certificates-g2.md](ca-trust-certificates-g2.md).
 
 | Role | Subject | SHA-256 |
 |---|---|---|

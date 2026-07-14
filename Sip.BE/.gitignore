@@ -44,6 +44,9 @@ logs/
 .DS_Store
 Thumbs.db
 
-## Trust anchor - pinned Root CA (Ban Cơ yếu G2). Cấp out-of-band từ ca.gov.vn,
-## verify bằng SHA-256 pin trong code (KHÔNG commit file cert).
+## Chứng thư số Ban Cơ yếu G2 (Root + CA trung gian) - pinned, verify bằng SHA-256 pin
+## trong code. Cấp out-of-band từ ca.gov.vn (KHÔNG commit file cert).
 Sip.be.Api/rootcag2.crt
+Sip.be.Api/dcscag2.crt
+Sip.be.Api/cpg2.crt
+Sip.be.Api/cpg2.cer

@@ -23,7 +23,12 @@ namespace Sip.be.External.Documents
             new(@"/ByteRange\s*\[\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*\]", RegexOptions.Compiled);
 
         // Nạp + kiểm pin Root G2 1 lần (fail-closed nếu thiếu/sai pin).
-        private static readonly Lazy<X509Certificate2?> RootG2 = new(LoadRootG2);
+        private static readonly Lazy<X509Certificate2?> RootG2 =
+            new(() => LoadPinnedCert(SignatureConstants.RootG2FileName, SignatureConstants.RootG2Sha256));
+
+        // Nạp + kiểm pin các CA TRUNG GIAN dưới Root G2 (Đảng/Nhà nước G2) 1 lần; bỏ qua cert thiếu/sai pin.
+        // Đưa vào ExtraStore khi dựng chain để leaf về được Root G2 kể cả khi token/PDF không nhúng sẵn CA trung gian.
+        private static readonly Lazy<X509Certificate2Collection> IntermediateCAs = new(LoadIntermediateCAs);
 
         /// <summary>
         /// Verify 1 file. Non-PDF -> NotApplicable. PDF không có/không hợp lệ dấu thời gian -> verdict chặn.
@@ -176,6 +181,8 @@ namespace Sip.be.External.Documents
             chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
             chain.ChainPolicy.CustomTrustStore.Add(root);
             chain.ChainPolicy.ExtraStore.AddRange(extra);
+            // CA trung gian đã ghim (Đảng/Nhà nước G2) — giúp dựng chain khi token/PDF thiếu CA trung gian.
+            chain.ChainPolicy.ExtraStore.AddRange(IntermediateCAs.Value);
             if (!chain.Build(leaf)) return false;
             // CustomRootTrust đã bảo đảm kết thúc ở Root G2; kiểm lại thumbprint cho chắc.
             var top = chain.ChainElements[^1].Certificate;
@@ -198,12 +205,24 @@ namespace Sip.be.External.Documents
             try { return Convert.FromHexString(hex); } catch { return null; }
         }
 
-        /// <summary>Nạp Root G2 từ file (PEM hoặc DER) rồi đối chiếu SHA-256 (DER) với pin; null nếu thiếu/sai.</summary>
-        private static X509Certificate2? LoadRootG2()
+        /// <summary>Nạp các CA trung gian đã ghim (Đảng/Nhà nước G2) cạnh app; bỏ qua cert thiếu/sai pin.</summary>
+        private static X509Certificate2Collection LoadIntermediateCAs()
+        {
+            var col = new X509Certificate2Collection();
+            foreach (var (fileName, pin) in SignatureConstants.IntermediateCaPins)
+            {
+                var cert = LoadPinnedCert(fileName, pin);
+                if (cert != null) col.Add(cert);
+            }
+            return col;
+        }
+
+        /// <summary>Nạp 1 cert từ file (PEM hoặc DER) rồi đối chiếu SHA-256 (DER) với pin; null nếu thiếu/sai.</summary>
+        private static X509Certificate2? LoadPinnedCert(string fileName, string expectedSha256)
         {
             try
             {
-                var path = Path.Combine(AppContext.BaseDirectory, SignatureConstants.RootG2FileName);
+                var path = Path.Combine(AppContext.BaseDirectory, fileName);
                 if (!File.Exists(path)) return null;
                 var text = File.ReadAllText(path);
                 // CreateFromPem = PEM CHỈ chứa cert (CreateFromPemFile là cho cert+private key -> ném lỗi với PEM cert-only).
@@ -211,7 +230,7 @@ namespace Sip.be.External.Documents
                     ? X509Certificate2.CreateFromPem(text)                      // PEM cert-only (bản tải ca.gov.vn)
                     : X509CertificateLoader.LoadCertificateFromFile(path);      // DER
                 var sha = cert.GetCertHashString(HashAlgorithmName.SHA256);
-                return string.Equals(sha, SignatureConstants.RootG2Sha256, StringComparison.OrdinalIgnoreCase)
+                return string.Equals(sha, expectedSha256, StringComparison.OrdinalIgnoreCase)
                     ? cert
                     : null;
             }

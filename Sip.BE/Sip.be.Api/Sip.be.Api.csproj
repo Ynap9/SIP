@@ -29,8 +29,15 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Trust anchor Root G2 (Ban Cơ yếu) - gitignore, cấp out-of-band; copy ra output để SignatureVerifier nạp & đối chiếu pin. -->
+    <!-- Chứng thư số Ban Cơ yếu G2 (gitignore, cấp out-of-band) - copy ra output để SignatureVerifier nạp & đối chiếu pin.
+         rootcag2 = Root (trust anchor); dcscag2/cpg2 = CA trung gian (Đảng/Nhà nước G2) đưa vào ExtraStore khi dựng chain. -->
     <Content Include="rootcag2.crt" Condition="Exists('rootcag2.crt')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="dcscag2.crt" Condition="Exists('dcscag2.crt')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="cpg2.crt" Condition="Exists('cpg2.crt')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
