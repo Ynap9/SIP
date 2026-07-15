@@ -44,9 +44,13 @@ logs/
 .DS_Store
 Thumbs.db
 
-## Chứng thư số Ban Cơ yếu G2 (Root + CA trung gian) - pinned, verify bằng SHA-256 pin
+## Chứng thư số Ban Cơ yếu (Root + CA trung gian) - pinned, verify bằng SHA-256 pin
 ## trong code. Cấp out-of-band từ ca.gov.vn (KHÔNG commit file cert).
+## G2 (dùng cho chain của TSA dấu thời gian):
 Sip.be.Api/rootcag2.crt
 Sip.be.Api/dcscag2.crt
 Sip.be.Api/cpg2.crt
 Sip.be.Api/cpg2.cer
+## G1 (dùng cho chain của NGƯỜI KÝ - token production là G1):
+Sip.be.Api/cp.crt
+Sip.be.Api/cp.cer
