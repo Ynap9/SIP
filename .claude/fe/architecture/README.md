@@ -15,10 +15,10 @@ src/
 ├── main.ts / app.ts / app.config.ts / app.routes.ts   # bootstrap (files live in src/, not src/app/)
 └── app/
     ├── layout/       # shell: layout, topbar, sidebar, footer, menu + LayoutService
-    ├── pages/        # feature pages (home, config, dong-goi/…) — lazy-loaded via *.router.ts
-    ├── services/     # HTTP + desktop bridge services (root-provided)
-    ├── models/       # per-feature interfaces (config, check, pack)
-    └── shared/       # BaseComponent, SharedImports, data-table, utils, models, directives, constants
+    ├── pages/        # home, config, dong-goi/{check,multi}, boc-tach, ky-so — lazy-loaded via *.router.ts
+    ├── services/     # config, check, multi-check, pack, multi-pack, unpack, sign, desktop (root-provided)
+    ├── models/       # per-feature interfaces (config, check, multi-check, pack, multi-pack, unpack, sign)
+    └── shared/       # BaseComponent, SharedImports, data-table, file-tree, utils, models, directives, constants
 ```
 
 ## Document index
@@ -30,7 +30,9 @@ src/
 | [04-layout.md](04-layout.md) | Shell layout + LayoutService |
 | [05-conventions.md](05-conventions.md) | Signals, standalone, naming, response handling |
 
-## The three UI flows (mirror the BE)
-- **Config** (`pages/config`) — view ConfigHoSo / ConfigVanBan tables.
-- **Check + Pack** (`pages/dong-goi`) — pick a folder, stream check results (SSE), then pack.
+## The UI flows (mirror the BE)
 - **Home** (`pages/home`) — landing.
+- **Config** (`pages/config`, `/cau-hinh`) — view ConfigHoSo / ConfigVanBan tables.
+- **Check + Pack** (`pages/dong-goi`, `/dong-goi`) — `check` = one hồ sơ, `multi` = a parent folder; pick a folder, stream results (SSE), then pack. Both routes carry `data: { reuse: true }` (see `shared/app-route-reuse.strategy.ts`).
+- **Sign** (`pages/ky-so`, `/ky-so`) — 3-step wizard: `cert-step` (pick certificate/token) → `config-step` (PDF preview with `pdfjs-dist`, drag-drop the signature position, pages-to-stamp, overlap option) → `sign-step` (PDF/A gate + sign, SSE).
+- **Unpack** (`pages/boc-tach`, `/boc-tach`) — reverse a SIP `.zip`/folder, browse the result with `shared/components/file-tree`.

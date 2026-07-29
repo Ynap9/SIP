@@ -40,7 +40,7 @@ public class SipDbContext : DbContext {
 Defaults are set in the model (`Deleted=false`, `CreatedDate=CURRENT_TIMESTAMP`) rather than in code.
 
 ## Repository pattern?
-There is **none**. Services depend on `SipDbContext` directly (via `BaseService`) and use EF LINQ. Don't introduce a repository layer unless asked.
+There is **none**. Services depend on `SipDbContext` directly (via `BaseService`) and use EF LINQ. Don't introduce a  repository layer unless asked.
 
 ## Adding a table / changing schema
 1. Add/modify the entity in `Sip.be.Domain`.

@@ -7,6 +7,8 @@ using Sip.be.Application.Document.Interfaces;
 using Sip.be.External.Documents;
 using Sip.be.infratructure.Persistence;
 using Sip.be.Shared.Constants;
+using Sip.be.External.Documents.Interfaces;
+using Sip.be.External.Documents.Implements;
 
 namespace Sip.be.Api
 {
@@ -55,9 +57,21 @@ namespace Sip.be.Api
             builder.Services.AddScoped<ICheckService, CheckService>();
             builder.Services.AddScoped<IPackService, PackService>();
             builder.Services.AddScoped<IUnpackService, UnpackService>();
-            // Logic phụ trợ (bên thứ 3) ở Sip.be.External - đọc/verify chữ ký số PDF
+            builder.Services.AddScoped<ISignService, SignService>();
+            // Logic phụ trợ (bên thứ 3) ở Sip.be.External - đọc/verify chữ ký số PDF, đọc chứng thư số
             builder.Services.AddScoped<IPdfSignatureReader, PdfSignatureReader>();
             builder.Services.AddScoped<ISignatureVerifier, SignatureVerifier>();
+            // Soi định dạng PDF/A hai lớp cho bước gate trước khi ký (kiem-tra-dinh-dang)
+            builder.Services.AddScoped<IPdfFormatInspector, PdfFormatInspector>();
+            builder.Services.AddScoped<ICertificateProvider, CertificateProvider>();
+            // Ký số: Scoped để cache chứng thư + handle khóa sống đúng 1 lô ký (xem ISigningKey.ClearCache).
+            builder.Services.AddScoped<ISigningKey, StoreSigningKey>();
+            builder.Services.AddScoped<ITimestampClient, TimestampClient>();
+            builder.Services.AddScoped<IPdfSigner, PdfSigner>();
+            builder.Services.AddScoped<ISignaturePlacementResolver, SignaturePlacementResolver>();
+            // Đo khổ trang cho bước kiểm vị trí chữ ký trước khi ký (kiem-tra-vi-tri)
+            builder.Services.AddScoped<IPdfPageInspector, PdfPageInspector>();
+
             #endregion
             #region mapper
             builder.Services.AddAutoMapper(cfg => { }, typeof(MappingProfile));

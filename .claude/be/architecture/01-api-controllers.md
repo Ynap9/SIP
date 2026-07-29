@@ -8,8 +8,11 @@ Sip.be.Api/
 └── Controllers/Documents/           # feature controllers grouped by domain area
     ├── ConfigController.cs
     ├── CheckController.cs
-    └── PackController.cs
+    ├── PackController.cs
+    ├── UnpackController.cs
+    └── SignController.cs
 ```
+(`Controllers/WeatherForecastController.cs` is leftover template scaffolding — not part of the app.)
 
 ## Controller rules
 - Inherit `BaseController` and pass `ILogger<T>` to `base(logger)`.
@@ -30,6 +33,8 @@ public ApiResponse GetConfigHoSo()
 ```
 Note: actions return HTTP 200 even on business errors; the real status lives in `ApiResponse.Status`/`Code` (see [06-shared.md](06-shared.md)).
 
+**One documented exception:** `GET sign/xem-file` returns the **raw PDF bytes** (`IActionResult` + `File(...)`), not an envelope — the output feeds pdf.js in the browser, and a JSON wrapper would make it unreadable. Errors there return HTTP 404. Every other action keeps the envelope.
+
 ## BaseController.OkException(ex)
 Central error translator. Inspects the exception type and builds an error `ApiResponse`:
 - `UserFriendlyException` → uses its `ErrorCode` + localized/`ErrorMessages.GetMessage(code)` message.
@@ -37,8 +42,8 @@ Central error translator. Inspects the exception type and builds an error `ApiRe
 - anything else → `InternalServerError` + generic message.
 All branches log via `ILogger` with request path + query. **Do not** hand-craft error responses in controllers — always use `OkException`.
 
-## Server-Sent Events (Check flow)
-`CheckController.CheckHoSoFolder` streams progress instead of returning a body:
+## Server-Sent Events
+Five actions stream progress instead of returning a body — `check/ho-so-folder`, `check/multi-folder`, `pack/multi-folder`, `sign/kiem-tra-dinh-dang`, `sign/ky-thu-muc`. They all copy the same shape, described here for `CheckController.CheckHoSoFolder`:
 - Sets headers `Content-Type: text/event-stream`, `Cache-Control: no-cache`, `Connection: keep-alive`.
 - Disables response buffering (`IHttpResponseBodyFeature.DisableBuffering()`) for realtime push.
 - Iterates `await foreach (var p in _checkService.CheckHoSoFolderAsync(input, HttpContext.RequestAborted))`, serializes each event as **camelCase** JSON and writes `data: {json}\n\n`, then flushes.

@@ -1,7 +1,16 @@
 # Plan — Harden `SignatureVerifier` (document integrity, all-signatures rule, chain time)
 
-> Make `ValidTrusted` prove the **document**. Today it proves only "a genuine VGCA TSA timestamped *some* signature
-> value" — a tampered file, a transplanted CMS blob, and a forged block hiding behind a genuine one all pass.
+> **STATUS (2026-07-17): steps 1–5 implemented and runtime-verified; step 6 (regression fixtures) outstanding.**
+> Measured after the change: 13/13 real files stay `ValidTrusted` (1 signature each); a 1-byte tamper inside a signed
+> range, 20 bytes appended after EOF, and a genuine CMS transplanted into another file are **all** now
+> `InvalidSignature`; a non-PDF is still `NotApplicable`. `VerificationTime` is proven honoured and `Kind=Utc`
+> proven interpreted as UTC (see step 4). **The multi-signature debt below is still open and is the main gap.**
+> *Note: `ng test` is red (15/18 files) both before and after this change — a pre-existing TestBed DI failure,
+> unrelated; FE was validated with `npm run build`.*
+>
+> Make `ValidTrusted` prove the **document**. Before this: it proved only "a genuine VGCA TSA timestamped *some*
+> signature value" — a tampered file, a transplanted CMS blob, and a forged block hiding behind a genuine one all
+> passed.
 > Signer **identity** is the companion plan: [signer-trust-gate.plan.md](signer-trust-gate.plan.md) — needed for the
 > gate to be sound, but separable and blocked on material.
 > Bugs: [../bug/verifier-never-checks-document-integrity.md](../bug/verifier-never-checks-document-integrity.md),
@@ -19,7 +28,7 @@
   incremental update, so incremental update is normal, not a tamper signal.
 - **G2 material present + pin-verified** in `Sip.be.Api/` (`rootcag2.crt`, `cpg2.crt` — DER, `dcscag2.crt`);
   filenames are load-bearing (`File.Exists` + csproj + `Sip.BE/.gitignore:49-51`), a mismatch silently nulls the
-  anchor and verdicts **every** file `UntrustedTsa`. See [../ca-trust-certificates-g2.md](../ca-trust-certificates-g2.md).
+  anchor and verdicts **every** file `UntrustedTsa`. See [../ca-trust-certificates.md](../ca-trust-certificates.md).
 - Zero-dep constraint stands: `System.Security.Cryptography.Pkcs` only.
 
 ## Steps
@@ -46,19 +55,29 @@
      leaves `start2+len2 = 718921` vs `fileLength = 719493` while `CheckSignature` still passes. A blanket EOF rule
      would reject every genuine multi-signature file. Requiring it of the **outermost** signature still blocks an
      appended unsigned revision and guarantees every byte is covered by at least one signature.
-4. **Fix TSA chain verification time.** Compute `trustedUtc` (with the +7h VGCA correction) **before** the chain
-   build and pass it into `ChainsToRoot`, which sets `chain.ChainPolicy.VerificationTime`. Keep the Root G2 anchor
-   and the `ChainElements[^1]` pin check unchanged. `dotnet build`.
-   - *Decision:* be explicit about `DateTimeKind` — this exact code already carries a 7h timezone quirk; pass an
-     unambiguous instant and assert it in a test rather than relying on implicit `DateTime` conversion.
-5. **FE surfacing.** Extend `models/check.models.ts` with the new verdict + `signatures[]`; render **one row per
-   signature** in the "Dấu thời gian" cell of `check.html` and `dong-goi/multi` (badge + signer + reason each), so a
-   file failing on 1 of 3 signatures shows *which* one instead of a single opaque badge. `npm run build`.
-6. **Regression fixtures.** Port the PoC: (a) 5/5 real files stay `ValidTrusted`; (b) 1-byte tamper inside a signed
-   range ⇒ `InvalidSignature`; (c) genuine CMS transplanted into an unrelated file ⇒ `InvalidSignature`; (d) bytes
-   appended after the outermost signature ⇒ blocking; (e) two-block file ⇒ same verdict **in both orders**
-   (`[genuine, forged]` / `[forged, genuine]`) — order must not matter; (f) expired TSA leaf valid at stamp time ⇒
-   passes. `dotnet build`.
+4. ✅ **Fix TSA chain verification time.** `trustedUtc` is now computed **before** any chain build and passed into
+   `ChainsToRoot`, which sets `chain.ChainPolicy.VerificationTime`. Root G2 anchor and the `ChainElements[^1]` pin
+   check unchanged. `dotnet build`.
+   - *Corrected 2026-07-21:* this step originally used `genTime + 7h`; `trustedUtc` is now the **raw** `genTime` —
+     the offset belonged to the signer's `signingTime`, not the TSA.
+   - *Decision:* the parameter is **required**, not optional-with-default — forgetting it silently reverts to `Now`,
+     i.e. the exact bug this step fixes.
+   - *Decision — `DateTimeKind` asserted, not assumed (measured):* `DateTimeOffset.UtcDateTime` gives `Kind=Utc`, an
+     unambiguous instant. Proven on the real TSA cert: `VerificationTime` is honoured (2000 ⇒ `false`, 2050 ⇒
+     `false`, `trustedUtc` ⇒ `true`), and at `NotBefore` `+1h ⇒ true` / `−1h ⇒ false` — a 7h misread would flip that.
+   - *Note:* the sample TSA cert runs to **2034**, so this changes no verdict today — a time bomb, not a visible
+     bug. Do not "simplify" it back to `Now`.
+5. ✅ **FE surfacing.** `models/check.models.ts` gained the verdicts + `ISignatureDetail`/`signatures[]`; the
+   "Dấu thời gian" cell of `check.html` and `dong-goi/multi` renders **one row per signature** (badge + signer +
+   reason) via a shared `#verdictBadge` `ng-template`. `#n` + signer show only when a file has **>1** signature, so
+   single-signature files look unchanged. `npm run build`.
+   - *Known duplication (not touched):* the cell + `#verdictBadge` are copied in both templates, matching how they
+     already duplicate every other cell. Extracting a shared component is a separate call.
+6. ⏳ **Regression fixtures — OUTSTANDING.** All of these have been run **as a throwaway harness** and pass; none is
+   committed as a test. (a) ✅ 13/13 real files stay `ValidTrusted`; (b) ✅ 1-byte tamper inside a signed range ⇒
+   `InvalidSignature`; (c) ✅ genuine CMS transplanted into an unrelated file ⇒ `InvalidSignature`; (d) ✅ bytes
+   appended after the outermost signature ⇒ blocking; (e) ⏳ two-block file ⇒ same verdict **in both orders** — see
+   the debt below, still unprovable; (f) ✅ TSA leaf judged at stamp time, not `Now`. `dotnet build`.
 7. **Update the spec.** Rewrite [../verify-signature-timestamp.md](../verify-signature-timestamp.md) §4–§5 and §7:
    the all-signatures rule, the integrity step, the outermost-EOF rule, the new verdict, and `VerificationTime`.
 

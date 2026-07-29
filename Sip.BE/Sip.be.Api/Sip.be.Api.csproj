@@ -40,6 +40,14 @@
     <Content Include="cpg2.crt" Condition="Exists('cpg2.crt')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <!-- Nhánh G1 (thế hệ 2010-2030) dùng cho chain của NGƯỜI KÝ: rootca = Root G1 (trust anchor, self-signed);
+         cp.crt = Sub-CA G1 cấp cert người ký, vào ExtraStore vì CMS trong PDF chỉ nhúng leaf. -->
+    <Content Include="rootca.crt" Condition="Exists('rootca.crt')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="cp.crt" Condition="Exists('cp.crt')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
 </Project>

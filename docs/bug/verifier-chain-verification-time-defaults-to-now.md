@@ -1,5 +1,8 @@
 # BUG: TSA chain is validated at `DateTime.Now` — every archived file breaks when the TSA cert expires
 
+> **Status: FIXED** — verified in code 2026-07-20: `ChainsToRoot` takes a **required** `verificationTime`, and both
+> the TSA chain and the signer chain are built at `trustedUtc`, never at `DateTime.Now`. (Since 2026-07-21
+> `trustedUtc` is the **raw** genTime — the former +7h was a miscorrection.)
 > **Severity: HIGH — a dormant, self-triggering failure in an archival product.** No attacker needed: it fires on a
 > calendar date. Runtime-confirmed 2026-07-15.
 > Spec: [../verify-signature-timestamp.md](../verify-signature-timestamp.md).
@@ -54,14 +57,15 @@ validity window — the failure is latent and will appear **all at once**, for e
 Validate the TSA chain **as of the timestamp**, not as of now:
 
 ```csharp
-// trustedUtc = token.TokenInfo.Timestamp.UtcDateTime.AddHours(VgcaGenTimeOffsetHours)
+// trustedUtc = token.TokenInfo.Timestamp.UtcDateTime  (genTime tho, khong cong offset)
 chain.ChainPolicy.VerificationTime = trustedUtc.ToLocalTime();
 ```
 
 `ChainsToRoot` must therefore take the trusted time as a parameter — compute `trustedUtc` **before** the chain build
 and pass it in (today it is computed after). Two ordering notes:
-- Use the **+7h-corrected** time (the VGCA quirk), otherwise the verification instant is 7h off and can fall outside
-  a narrow validity window.
+- Use the **raw** `genTime`. An earlier revision added +7h here on the belief the TSA was skewed; that was wrong and
+  shifted every chain build 7h into the future — see
+  [genTime-offset-compensates-on-the-wrong-side.md](genTime-offset-compensates-on-the-wrong-side.md).
 - The chain-of-trust is not weakened: the anchor is still the pinned Root G2 and the pin check on
   `chain.ChainElements[^1]` still runs. Only the *instant* of evaluation changes.
 

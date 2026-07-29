@@ -1,0 +1,257 @@
+<div class="flex flex-col gap-4">
+  <!-- Chưa xong bước 1: cảnh báo, không cho thao tác ký (không chặn cứng navigation) -->
+  @if (!ready()) {
+    <p-message severity="warn" class="block w-full">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <span class="text-sm">Vui lòng chọn chứng thư số ở Bước 1 trước khi ký số.</span>
+        <p-button
+          label="Về Bước 1"
+          icon="pi pi-arrow-left"
+          severity="secondary"
+          [text]="true"
+          (onClick)="onBack()"
+        />
+      </div>
+    </p-message>
+  } @else {
+  <!-- Chứng thư số đã chọn ở bước 1 -->
+  <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+    <div class="flex items-center gap-2 text-sm">
+      <i class="pi pi-verified text-green-600"></i>
+      <span class="text-slate-500">Ký bằng chứng thư số:</span>
+      <span class="font-semibold text-slate-800 break-all">{{ certName() || 'Đã chọn' }}</span>
+    </div>
+    <p-button
+      label="Đổi chứng thư số"
+      icon="pi pi-arrow-left"
+      severity="secondary"
+      [text]="true"
+      [disabled]="checking() || signing()"
+      (onClick)="onBack()"
+    />
+  </div>
+
+  <!-- 1. Nguồn: lấy thẳng từ bước cấu hình chữ ký, KHÔNG cho đổi ở đây -->
+  <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+    <div class="flex min-w-0 items-center gap-2 text-sm">
+      <i class="pi pi-folder-open text-slate-500"></i>
+      <span class="text-slate-500">Thư mục ký số:</span>
+      <span class="font-semibold break-all text-slate-800">{{ sourcePath() || 'Chưa chọn ở bước cấu hình' }}</span>
+    </div>
+    <p-button
+      label="Kiểm tra lại"
+      icon="pi pi-refresh"
+      severity="secondary"
+      [text]="true"
+      [disabled]="!canCheck()"
+      [loading]="checking() || positionChecking()"
+      (onClick)="startCheck()"
+    />
+  </div>
+
+  <!-- 2. Kiểm cấu hình chữ ký: có tràn ra ngoài trang / lệch trang không -->
+  @if (positionChecking()) {
+    <div class="flex items-center gap-2 rounded-lg border border-slate-200 p-3 text-sm text-slate-600">
+      <i class="pi pi-spin pi-spinner"></i>
+      Đang kiểm cấu hình chữ ký trên từng file...
+    </div>
+  } @else if (positionCheck(); as check) {
+    <div class="rounded-lg border border-slate-200 p-3">
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+        <span class="font-medium text-slate-700">Cấu hình chữ ký</span>
+        <span class="inline-flex items-center gap-1 text-green-600">
+          <i class="pi pi-check-circle"></i> {{ check.fittedCount }}/{{ check.totalFiles }} file vừa vặn
+        </span>
+        @if (check.adjustedCount > 0) {
+          <span class="inline-flex items-center gap-1 text-amber-600">
+            <i class="pi pi-exclamation-triangle"></i> {{ check.adjustedCount }} file sẽ được chỉnh cho vừa trang
+          </span>
+        }
+        @if (check.unreadableCount > 0) {
+          <span class="inline-flex items-center gap-1 text-red-600">
+            <i class="pi pi-times-circle"></i> {{ check.unreadableCount }} file không đọc được
+          </span>
+        }
+      </div>
+
+      @if (adjustedFiles().length) {
+        <!-- Chỉ liệt kê file phải chỉnh; đây là CẢNH BÁO, không chặn ký -->
+        <div class="mt-2 flex max-h-48 flex-col gap-2 overflow-auto rounded bg-slate-50 p-3 text-xs text-slate-600">
+          @for (file of adjustedFiles(); track file.fullPath) {
+            <div>
+              <div class="font-medium break-all text-slate-700">{{ file.fileName }}</div>
+              @for (issue of file.issues; track $index) {
+                <div class="flex items-start gap-1 text-amber-700">
+                  <i class="pi pi-angle-right mt-0.5"></i><span>{{ issue }}</span>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Chú thích điều kiện ký -->
+  <p class="flex items-start gap-1 text-xs text-slate-500">
+    <i class="pi pi-info-circle mt-0.5"></i>
+    <span>
+      Chỉ ký được file <b>PDF/A hai lớp</b> (ảnh scan + text OCR). Hệ thống kiểm định dạng mọi file trước; chỉ cần
+      <b>có ít nhất một</b> file hợp lệ là mở khoá nút <b>Ký số</b>. File không đạt sẽ tự động bị <b>bỏ qua</b>, không ký.
+    </span>
+  </p>
+
+  <!-- 2. Tiến trình + bảng -->
+  @if (checking() || signing() || checkDone()) {
+    <p-progressbar [value]="percent()" />
+  }
+
+  @if (fileRows().length) {
+    <p-table [value]="sortedFileRows()" [showGridlines]="true" [tableStyle]="{ 'min-width': '60rem' }">
+      <ng-template pTemplate="header">
+        <tr>
+          <th style="width: 4rem; text-align: center">STT</th>
+          <th style="text-align: center">Tên file</th>
+          <th style="width: 11rem; text-align: center">Trạng thái</th>
+          <th style="text-align: center">Nguyên nhân</th>
+          <th style="width: 11rem; text-align: center">Trạng thái ký số</th>
+          <th style="width: 8rem; text-align: center">Chữ ký hợp lệ</th>
+          <th style="width: 13rem; text-align: center">Time ký</th>
+          <th style="width: 13rem; text-align: center">Dấu thời gian</th>
+        </tr>
+      </ng-template>
+
+      <ng-template pTemplate="body" let-row let-i="rowIndex">
+        <tr>
+          <td style="text-align: center">{{ i + 1 }}</td>
+          <td style="text-align: center" class="break-all">{{ row.name }}</td>
+
+          <!-- Trạng thái kiểm định dạng: spinner khi đang kiểm -> badge theo verdict -->
+          <td style="text-align: center">
+            @if (row.checkStatus === 'processing') {
+              <i class="pi pi-spin pi-spinner text-slate-500"></i>
+            } @else if (row.verdict !== undefined && row.verdict !== null) {
+              <p-tag [value]="verdictLabel(row.verdict)" [severity]="verdictSeverity(row.verdict)" />
+            } @else {
+              <span class="text-slate-300">—</span>
+            }
+          </td>
+
+          <!-- Nguyên nhân (chỉ có khi file không hợp lệ) -->
+          <td style="text-align: center" class="text-red-600">{{ row.checkMessage }}</td>
+
+          <!-- Trạng thái ký số -->
+          <td style="text-align: center">
+            @switch (row.signStatus) {
+              @case ('processing') {
+                <i class="pi pi-spin pi-spinner text-slate-500"></i>
+              }
+              @case ('signed') {
+                <span class="inline-flex items-center gap-1 text-xs font-medium text-green-600">
+                  <i class="pi pi-verified"></i> Đã ký
+                </span>
+              }
+              @case ('skipped') {
+                <!-- Bỏ qua: không đạt PDF/A hai lớp, KHÔNG phải lỗi -> màu amber; hover xem lý do -->
+                <span
+                  class="inline-flex items-center gap-1 text-xs font-medium text-amber-600"
+                  [title]="row.signMessage || ''"
+                >
+                  <i class="pi pi-ban"></i> Bỏ qua
+                </span>
+              }
+              @case ('failed') {
+                <span
+                  class="inline-flex items-center gap-1 text-xs font-medium text-red-600"
+                  [title]="row.signMessage || ''"
+                >
+                  <i class="pi pi-times-circle"></i> Ký lỗi
+                </span>
+              }
+              @default {
+                <span class="text-slate-300">—</span>
+              }
+            }
+          </td>
+
+          <!-- Số chữ ký ĐẠT / tổng số chữ ký trong file (file có thể đã có chữ ký từ trước) -->
+          <td style="text-align: center">
+            @if (row.signatureCount) {
+              <span
+                class="text-xs font-medium"
+                [class.text-green-600]="row.validSignatureCount === row.signatureCount"
+                [class.text-amber-600]="(row.validSignatureCount ?? 0) < (row.signatureCount ?? 0)"
+              >
+                {{ row.validSignatureCount ?? 0 }}/{{ row.signatureCount }}
+              </span>
+            } @else {
+              <span class="text-slate-300">—</span>
+            }
+          </td>
+
+          <!-- Time ký = giờ ký tự khai của TỪNG chữ ký (mới nhất ở cuối) -->
+          <td style="text-align: center">
+            @if (row.signatures?.length) {
+              <div class="flex flex-col gap-0.5">
+                @for (sig of row.signatures; track $index) {
+                  <span class="text-xs text-slate-700">
+                    <span class="text-slate-400">#{{ $index + 1 }}</span>
+                    {{ sig.signingTime || '—' }}
+                  </span>
+                }
+              </div>
+            } @else if (row.signedTime) {
+              <span class="text-xs text-slate-700">{{ row.signedTime }}</span>
+            } @else {
+              <span class="text-slate-300">—</span>
+            }
+          </td>
+
+          <!-- Dấu thời gian = giờ TSA của TỪNG chữ ký, đã quy sang giờ VN (bảng này mọi cột đều giờ VN nên
+               không ghi kèm phần bù). -->
+          <td style="text-align: center">
+            @if (row.signatures?.length) {
+              <div class="flex flex-col gap-0.5">
+                @for (sig of row.signatures; track $index) {
+                  <span class="text-xs" [title]="sig.reason || ''">
+                    <span class="text-slate-400">#{{ $index + 1 }}</span>
+                    <span [class.text-green-600]="sig.verdict === 0" [class.text-amber-600]="sig.verdict !== 0">
+                      {{ sig.trustedTime || '—' }}
+                    </span>
+                  </span>
+                }
+              </div>
+            } @else if (row.trustedTime) {
+              <span class="text-xs text-slate-700">{{ row.trustedTime }}</span>
+            } @else {
+              <span class="text-slate-300">—</span>
+            }
+          </td>
+        </tr>
+      </ng-template>
+    </p-table>
+  }
+
+  <!-- 3. Nút: canh phải, dưới cùng -->
+  <div class="flex items-center justify-end gap-2">
+    <p-button
+      label="Ký số"
+      icon="pi pi-pencil"
+      styleClass="w-44 justify-center"
+      [disabled]="!canSign()"
+      [loading]="signing()"
+      (onClick)="onOpenSignDialog()"
+    />
+  </div>
+
+  <!-- Popup nhập thông tin ký -->
+  <app-sign-dialog [(visible)]="showSignDialog" (start)="onStartSign($event)" />
+
+  <!-- Dialog kết quả sau khi ký xong; nút "Mở thư mục" gọi lại openFolder của cha -->
+  <app-sign-result-dialog
+    [(visible)]="showResultDialog"
+    [result]="signResult()"
+    (openFolder)="openFolder($event)"
+  />
+  }
+</div>

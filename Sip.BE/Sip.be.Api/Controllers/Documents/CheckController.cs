@@ -1,7 +1,8 @@
-﻿using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
 using Sip.be.Api.Base;
 using Sip.be.Application.Document.Dtos.Check;
+using Sip.be.External.Documents.Dtos;
 using Sip.be.Application.Document.Interfaces;
 using Sip.be.Shared.Request;
 using System.Text.Encodings.Web;

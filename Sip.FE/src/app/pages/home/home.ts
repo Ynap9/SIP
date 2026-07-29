@@ -10,30 +10,41 @@ import { SharedImports } from '../../shared/import.shared';
   styleUrl: './home.scss'
 })
 export class Home {
+  // Đúng 4 chức năng của menu, không thêm không bớt: trang chủ là cửa vào của app nên chức năng nào có trong
+  // menu mà thiếu ở đây là người dùng không biết app làm được việc đó.
   protected readonly features = [
     {
       icon: 'pi pi-box',
       title: 'Kiểm tra & đóng gói',
-      desc: 'Đưa thư mục hồ sơ vào, kiểm tra hợp lệ theo TT05 rồi đóng gói thành gói SIP (.zip).',
+      desc: 'Kiểm tra hồ sơ theo TT05 qua 3 giai đoạn (cấu trúc, mã định danh, nội dung Excel) rồi đóng gói thành gói SIP. Làm được cả một hồ sơ lẻ lẫn thư mục cha chứa nhiều hồ sơ.',
       link: '/dong-goi'
+    },
+    {
+      icon: 'pi pi-verified',
+      title: 'Ký số tài liệu',
+      desc: 'Ký PDF/A bằng chứng thư số trên máy hoặc USB token, tự chọn vị trí chữ ký trên trang, mỗi file kèm dấu thời gian của Ban Cơ yếu Chính phủ.',
+      link: '/ky-so'
+    },
+    {
+      icon: 'pi pi-sitemap',
+      title: 'Bóc tách dữ liệu',
+      desc: 'Mở ngược một gói SIP (.zip hoặc thư mục) thành thư mục hồ sơ kèm file Excel mô tả, để tra cứu hoặc chỉnh sửa rồi đóng gói lại.',
+      link: '/boc-tach'
     },
     {
       icon: 'pi pi-cog',
       title: 'Cấu hình danh mục',
-      desc: 'Nhập cấu hình mô tả trường hồ sơ / văn bản từ Excel để hệ thống đối chiếu khi kiểm tra.',
+      desc: 'Nhập từ Excel danh mục trường mô tả Hồ sơ / Văn bản. Đây là căn cứ để bước kiểm tra đối chiếu từng ô dữ liệu.',
       link: '/cau-hinh'
-    },
-    {
-      icon: 'pi pi-verified',
-      title: 'Chuẩn TT05 / E-ARK',
-      desc: 'Sinh METS.xml, EAD và cấu trúc gói đúng Thông tư 05/2025/TT-BNV, mở rộng từ E-ARK CSIP.',
-      link: '/dong-goi'
     }
   ];
 
+  // Thứ tự đúng như thực tế phải làm: ký số TRƯỚC khi kiểm tra, vì tài liệu PDF chưa có chữ ký số hợp lệ sẽ
+  // bị chặn ở bước kiểm tra và không đóng gói được.
   protected readonly steps = [
-    { no: 1, title: 'Đưa thư mục hồ sơ', desc: 'Chọn thư mục chứa metadata + tài liệu đính kèm.' },
-    { no: 2, title: 'Kiểm tra hợp lệ', desc: 'Đối chiếu cấu trúc, mã và nội dung theo TT05.' },
-    { no: 3, title: 'Đóng gói SIP', desc: 'Sinh gói SIP_tailieu và nén thành file ZIP.' }
+    { no: 1, title: 'Cấu hình danh mục', desc: 'Nhập Excel mô tả trường Hồ sơ / Văn bản một lần cho cả hệ thống.' },
+    { no: 2, title: 'Ký số tài liệu', desc: 'Ký các file PDF/A trong hồ sơ kèm dấu thời gian tin cậy.' },
+    { no: 3, title: 'Kiểm tra hồ sơ', desc: 'Đối chiếu cấu trúc thư mục, mã định danh và nội dung theo TT05.' },
+    { no: 4, title: 'Đóng gói SIP', desc: 'Sinh METS.xml + EAD.xml và nén thành gói SIP nộp lưu.' }
   ];
 }

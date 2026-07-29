@@ -11,8 +11,28 @@ export enum ETimestampVerdict {
   ValidTrusted = 0,
   NoTimestamp = 1,
   UntrustedTsa = 2,
+  /**
+   * signingTime nằm SAU genTime của TSA -> thứ tự ký không thể xảy ra. Không còn là ngưỡng
+   * khoảng cách giữa hai mốc (đồng hồ TSA không đủ ổn định để đo), nên verdict này rất hiếm.
+   */
   TimeMismatch = 3,
-  NotApplicable = 4
+  NotApplicable = 4,
+  /** Cert người ký không do CA Ban Cơ yếu cấp (chain không về Root G1 lẫn Root G2) -> chặn. */
+  UntrustedSigner = 5,
+  /** Nội dung đã bị sửa sau khi ký, hoặc có byte nằm ngoài mọi vùng ký -> chặn. */
+  InvalidSignature = 6
+}
+
+// Kết luận cho MỘT chữ ký trong file (khớp SignatureDetailDto BE).
+export interface ISignatureDetail {
+  signedBy?: string;
+  /** ETimestampVerdict (số). */
+  verdict: number;
+  reason?: string;
+  /** Dấu thời gian TSA của CHÍNH chữ ký này. */
+  trustedTime?: string;
+  /** Giờ ký tự khai của CHÍNH chữ ký này. */
+  signingTime?: string;
 }
 
 // Kết quả verify DẤU THỜI GIAN tin cậy (RFC 3161) của 1 file (khớp TimestampVerifyDto BE).
@@ -21,14 +41,30 @@ export interface ITimestampVerify {
   verdict: number;
   hasTimestamp: boolean;
   timestampAuthority?: string;
-  /** genTime + 7h, "dd/MM/yyyy HH:mm:ss". */
+  /**
+   * genTime thô của TSA (KHÔNG cộng offset), "dd/MM/yyyy HH:mm:ss".
+   * Là giờ của chữ ký MỚI NHẤT trong file; giờ từng chữ ký nằm ở `signatures`.
+   */
   trustedTime?: string;
+  /** Giờ ký tự khai của chữ ký MỚI NHẤT. */
   signingTime?: string;
+  /**
+   * Ghi chú của BE. CÓ THỂ có nội dung ngay cả khi verdict ĐẠT (vd: bên ký ghi giờ địa
+   * phương vào trường UTC signingTime). Không được suy ra lỗi từ việc reason có giá trị —
+   * chỉ phân nhánh theo verdict / isValid.
+   */
   reason?: string;
   /** = verdict ValidTrusted. */
   isValid?: boolean;
   /** Verdict này có chặn đóng gói không (PDF lỗi = true; hợp lệ & non-PDF = false). */
   blocks?: boolean;
+  /**
+   * Kết luận + giờ của từng chữ ký, xếp theo thứ tự ký (mới nhất ở cuối).
+   * `verdict` ở trên = verdict xấu nhất trong danh sách này.
+   */
+  signatures?: ISignatureDetail[];
+  /** Số chữ ký ĐẠT trong file (khác signatureBlockCount = tổng số chữ ký tìm thấy). */
+  validSignatureCount?: number;
 }
 
 // Thông tin ký số của 1 file (khớp SignatureInfoDto BE).

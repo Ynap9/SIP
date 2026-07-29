@@ -43,6 +43,19 @@ namespace Sip.be.Shared.Request.ErrorRequest
             { ErrorCodes.UnpackInvalidPackage, "Không nhận diện được gói SIP hợp lệ" },
 
             { ErrorCodes.TimestampInvalid, "Dấu thời gian/chữ ký số của file không hợp lệ" },
+            { ErrorCodes.SignatureInvalid, "Nội dung file đã bị sửa sau khi ký số" },
+
+            { ErrorCodes.CertificateNotFound, "Không đọc được chứng thư số nào trên máy" },
+            { ErrorCodes.CertificateNotSignable, "Không có chứng thư số nào dùng để ký được" },
+            { ErrorCodes.SignSourceNotFound, "Không tìm thấy file hoặc thư mục cần ký" },
+            { ErrorCodes.SignNoPdfFound, "Không có file PDF nào để ký" },
+            { ErrorCodes.SignTokenInvalid, "Chứng thư số không dùng để ký được" },
+            { ErrorCodes.SignFailed, "Ký số file thất bại" },
+            { ErrorCodes.SignPdfEncrypted, "File PDF được mã hóa nên không ký số được" },
+            { ErrorCodes.SignPdfLocked, "File PDF bị khóa không cho ký thêm (/DocMDP)" },
+            { ErrorCodes.SignPdfStructureUnsupported, "Cấu trúc file PDF không hỗ trợ ký nối bản" },
+            { ErrorCodes.PdfFormatInvalid, "File không đạt yêu cầu định dạng PDF/A hai lớp để ký số" },
+            { ErrorCodes.SignPositionInvalid, "Vị trí đặt chữ ký không hợp lệ" },
         };
 
         public static string GetMessage(int code)

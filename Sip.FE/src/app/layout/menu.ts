@@ -17,9 +17,9 @@ interface NavItem {
           [routerLink]="item.link"
           routerLinkActive="bg-indigo-50 text-indigo-700 font-semibold"
           [routerLinkActiveOptions]="{ exact: item.link === '/' }"
-          class="group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
+          class="group flex items-center gap-3 rounded-lg px-3 py-3 text-base font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
         >
-          <i [class]="item.icon" class="text-base text-slate-400 group-hover:text-slate-600"></i>
+          <i [class]="item.icon" class="text-lg text-slate-400 group-hover:text-slate-600"></i>
           <span>{{ item.label }}</span>
         </a>
       }
@@ -30,6 +30,7 @@ export class Menu {
   protected readonly navItems: NavItem[] = [
     { label: 'Trang chủ', link: '/', icon: 'pi pi-home' },
     { label: 'Kiểm tra & đóng gói', link: '/dong-goi', icon: 'pi pi-box' },
+    { label: 'Ký số', link: '/ky-so', icon: 'pi pi-verified' },
     { label: 'Bóc tách dữ liệu', link: '/boc-tach', icon: 'pi pi-sitemap' },
     { label: 'Cấu hình', link: '/cau-hinh', icon: 'pi pi-cog' }
   ];

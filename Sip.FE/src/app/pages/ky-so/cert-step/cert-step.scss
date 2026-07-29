@@ -1,0 +1,5 @@
+// Cột "Ghi chú" (lý do không ký được) có thể dài -> giữ xuống dòng, canh trái cho dễ đọc.
+:host ::ng-deep .cell-pre-line {
+  white-space: pre-line;
+  text-align: left;
+}

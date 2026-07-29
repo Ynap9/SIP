@@ -6,6 +6,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Sip.be.Infratructure\Sip.be.Infratructure.csproj" />
+    <!-- Application GỌI LẠI hợp đồng của External (Documents/Interfaces + Documents/Dtos): đọc/verify/ký PDF,
+         chứng thư số, TSA. Interface và DTO của phần này thuộc về External, không nhồi ngược vào Application. -->
+    <ProjectReference Include="..\Sip.be.External\Sip.be.External.csproj" />
   </ItemGroup>
 
   <ItemGroup>

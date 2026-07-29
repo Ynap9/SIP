@@ -1,0 +1,68 @@
+<!-- Dialog kết quả sau khi ký xong cả lô. Ẩn header mặc định để dựng hero tuỳ biến full-bleed. -->
+<p-dialog
+  [(visible)]="visible"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [dismissableMask]="true"
+  [showHeader]="false"
+  [style]="{ width: '32rem' }"
+  styleClass="sign-result-dialog"
+>
+  @if (result(); as r) {
+    @let s = status();
+    <div class="srd-card" [attr.data-tone]="s.tone">
+      <!-- Nút đóng nổi trên hero (thay cho X mặc định của p-dialog đã ẩn) -->
+      <button type="button" class="srd-dismiss" aria-label="Đóng" (click)="onClose()">
+        <i class="pi pi-times"></i>
+      </button>
+
+      <!-- Hero: vòng tròn trạng thái + tiêu đề + mô tả; tông màu đổi theo status -->
+      <div class="srd-hero">
+        <div class="srd-badge">
+          <span class="srd-badge__ring"></span>
+          <i class="pi" [ngClass]="s.icon"></i>
+        </div>
+        <h2 class="srd-title">{{ s.title }}</h2>
+        <p class="srd-subtitle">{{ s.subtitle }}</p>
+      </div>
+
+      <!-- Thân dialog: các ô số liệu + đường dẫn thư mục -->
+      <div class="srd-body">
+        <!-- Ba ô số liệu tách theo contract: đã ký / bỏ qua / lỗi -->
+        <div class="srd-stats">
+          <div class="srd-stat srd-stat--green">
+            <span class="srd-stat__value">{{ r.successCount }}</span>
+            <span class="srd-stat__label">Đã ký</span>
+            <span class="srd-stat__hint">/ {{ r.totalFiles }} file</span>
+          </div>
+          <div class="srd-stat srd-stat--amber" [class.srd-stat--muted]="r.skippedCount === 0">
+            <span class="srd-stat__value">{{ r.skippedCount }}</span>
+            <span class="srd-stat__label">Bỏ qua</span>
+            <span class="srd-stat__hint">Không đạt PDF/A</span>
+          </div>
+          <div class="srd-stat srd-stat--red" [class.srd-stat--muted]="r.failedCount === 0">
+            <span class="srd-stat__value">{{ r.failedCount }}</span>
+            <span class="srd-stat__label">Lỗi</span>
+            <span class="srd-stat__hint">Không ký được</span>
+          </div>
+        </div>
+
+        <!-- Thư mục nguồn chứa file đã ký (file _daky_ ghi cạnh file gốc) -->
+        <div class="srd-path">
+          <span class="srd-path__icon"><i class="pi pi-folder"></i></span>
+          <div class="srd-path__text">
+            <span class="srd-path__label">Thư mục chứa file đã ký</span>
+            <span class="srd-path__value" [title]="r.outputFolder">{{ r.outputFolder }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer: giữ nguyên contract 2 nút Đóng + Mở thư mục -->
+      <div class="srd-footer">
+        <p-button label="Đóng" severity="secondary" [text]="true" (onClick)="onClose()" />
+        <p-button label="Mở thư mục" icon="pi pi-folder-open" (onClick)="onOpenFolder()" />
+      </div>
+    </div>
+  }
+</p-dialog>

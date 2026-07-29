@@ -3,10 +3,12 @@
 @import "tailwindcss";
 @import "primeicons/primeicons.css";
 
-/* Font toàn app: Times New Roman + cỡ chữ nhỏ lại */
+/* Font toàn app: chữ KHÔNG CHÂN (sans-serif). Dùng font có sẵn của hệ điều hành, KHÔNG tải từ mạng:
+   SIPPACK là app desktop chạy offline nên font web (Google Fonts...) sẽ không tải được và rơi về font mặc
+   định. Segoe UI là font Windows, đủ dấu tiếng Việt; các tên còn lại để dự phòng trên nền tảng khác. */
 html,
 body {
-  font-family: 'Times New Roman', Times, serif;
+  font-family: 'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
 body {
@@ -14,9 +16,9 @@ body {
   background-color: #eef2f7; /* nền xám của layout */
 }
 
-/* Buộc mọi component PrimeNG dùng Times New Roman + cỡ chữ nhỏ */
+/* Buộc mọi component PrimeNG dùng đúng font + cỡ chữ của app */
 .p-component {
-  font-family: 'Times New Roman', Times, serif !important;
+  font-family: 'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif !important;
   font-size: 15px !important;
 }
 

@@ -1,0 +1,40 @@
+<div class="flex flex-col gap-4">
+  <app-breadcrumb [home]="home" [items]="breadcrumbItems" />
+
+  <!-- Tiêu đề trang -->
+  <h1 class="text-xl font-semibold text-slate-800">Quy trình ký số</h1>
+
+  <!-- Chỉ báo 3 bước: click chọn bước được (bước sau tự cảnh báo nếu chưa xong bước trước) -->
+  <p-steps
+    [model]="steps"
+    [activeIndex]="activeStep()"
+    [readonly]="false"
+    styleClass="ky-so-steps"
+    (activeIndexChange)="onStepChange($event)"
+  />
+
+  <!-- Nội dung theo bước hiện tại -->
+  @switch (activeStep()) {
+    @case (0) {
+      <app-cert-step (verified)="onVerified($event)" />
+    }
+    @case (1) {
+      <app-config-step
+        [certName]="verifiedCert()?.commonName ?? ''"
+        [(sourcePath)]="sourcePath"
+        (configured)="onConfigured($event)"
+        (back)="backToCert()"
+      />
+    }
+    @case (2) {
+      <app-sign-step
+        [thumbprint]="verifiedCert()?.thumbprint ?? ''"
+        [certName]="verifiedCert()?.commonName ?? ''"
+        [ready]="!!verifiedCert()"
+        [initialSourcePath]="sourcePath()"
+        [config]="signConfig()"
+        (back)="backToConfig()"
+      />
+    }
+  }
+</div>

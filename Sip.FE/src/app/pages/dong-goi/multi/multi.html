@@ -36,8 +36,8 @@
     <i class="pi pi-info-circle mt-0.5"></i>
     <span>
       Hệ thống đối chiếu <b>thời gian ký</b> trên từng file với <b>dấu thời gian tin cậy</b> do máy chủ cấp dấu thời
-      gian của Ban Cơ yếu Chính phủ ký. File PDF không có dấu thời gian, sai nguồn cấp, hoặc lệch giờ quá mức cho phép
-      sẽ bị coi là không hợp lệ và không cho đóng gói.
+      gian của Ban Cơ yếu Chính phủ ký. File PDF không có dấu thời gian, sai nguồn cấp, bị sửa nội dung sau khi ký, hoặc
+      có giờ ký muộn hơn dấu thời gian sẽ bị coi là không hợp lệ và không cho đóng gói.
     </span>
   </p>
 
@@ -155,9 +155,16 @@
                                   <div class="flex flex-col gap-0.5">
                                     <span class="inline-flex items-center gap-1 text-xs font-medium text-green-600">
                                       <i class="pi pi-verified"></i> Đã ký
+                                      @if (f.signature.signers.length > 1) {
+                                        <span class="font-normal text-slate-500">({{ f.signature.signers.length }} chữ ký)</span>
+                                      }
                                     </span>
+                                    <!-- Mỗi chữ ký một dòng, đánh #n để đối chiếu 1-1 với cột dấu thời gian -->
                                     @for (s of f.signature.signers; track $index) {
                                       <span class="text-[11px] leading-tight text-slate-600 break-all">
+                                        @if (f.signature.signers.length > 1) {
+                                          <span class="text-slate-400">#{{ $index + 1 }}</span>
+                                        }
                                         {{ s.signedBy || 'Không rõ người ký' }}@if (s.signedAt) {<span> · {{ s.signedAt }}</span>}
                                       </span>
                                     }
@@ -175,32 +182,39 @@
                             <td>
                               @if (f.signature?.timestamp; as ts) {
                                 <div class="flex flex-col items-center gap-0.5">
-                                  @switch (ts.verdict) {
-                                    @case (EVerdict.ValidTrusted) {
-                                      <span class="inline-flex items-center gap-1 text-xs font-medium text-green-600" [title]="ts.timestampAuthority || ''">
-                                        <i class="pi pi-verified"></i> Hợp lệ
+                                  @if (ts.signatures?.length) {
+                                    <!-- 1 dòng / 1 chữ ký: file nhiều chữ ký phải thấy CHỮ KÝ NÀO hỏng.
+                                         Chỉ hiện #n + người ký khi có >1 chữ ký -> file thường giữ giao diện cũ. -->
+                                    @if (ts.signatures!.length > 1) {
+                                      <span class="text-[11px] leading-tight font-medium text-slate-500">
+                                        {{ ts.validSignatureCount ?? 0 }}/{{ ts.signatures!.length }} chữ ký hợp lệ
                                       </span>
                                     }
-                                    @case (EVerdict.NotApplicable) {
-                                      <span class="inline-flex items-center gap-1 text-xs font-medium text-amber-600" [title]="ts.reason || ''">
-                                        <i class="pi pi-exclamation-triangle"></i> Không áp dụng
-                                      </span>
-                                    }
-                                    @default {
-                                      <span class="inline-flex items-center gap-1 text-xs font-medium text-red-600" [title]="ts.reason || ''">
-                                        <i class="pi pi-times-circle"></i>
-                                        @switch (ts.verdict) {
-                                          @case (EVerdict.NoTimestamp) { Không có }
-                                          @case (EVerdict.UntrustedTsa) { Không tin cậy }
-                                          @case (EVerdict.TimeMismatch) { Lệch giờ }
-                                          @default { Không hợp lệ }
+                                    @for (s of ts.signatures; track $index) {
+                                      <div class="flex flex-col items-center gap-0.5">
+                                        <span class="inline-flex items-center gap-1">
+                                          @if (ts.signatures!.length > 1) {
+                                            <span class="text-[11px] leading-tight text-slate-400">#{{ $index + 1 }}</span>
+                                          }
+                                          <ng-container
+                                            *ngTemplateOutlet="verdictBadge; context: { v: s.verdict, reason: s.reason, tsa: ts.timestampAuthority }"
+                                          ></ng-container>
+                                        </span>
+                                        @if (ts.signatures!.length > 1 && s.signedBy) {
+                                          <span class="text-[11px] leading-tight text-slate-600 break-all">{{ s.signedBy }}</span>
                                         }
-                                      </span>
+                                        <!-- CHỈ giờ TSA của chính chữ ký này (giờ bên ký nằm ở cột "Ký số"),
+                                             đã quy sang giờ VN; cả bảng cùng múi nên không ghi phần bù -->
+                                        @if (s.trustedTime) {
+                                          <span class="text-[11px] leading-tight text-slate-600">{{ s.trustedTime }}</span>
+                                        }
+                                      </div>
                                     }
-                                  }
-                                  <!-- Thời gian của dấu thời gian tin cậy (đã +7h theo TSA VGCA) -->
-                                  @if (ts.trustedTime) {
-                                    <span class="text-[11px] leading-tight text-slate-600">{{ ts.trustedTime }}</span>
+                                  } @else {
+                                    <!-- Không có chữ ký nào (non-PDF / PDF chưa ký) -> verdict cấp file -->
+                                    <ng-container
+                                      *ngTemplateOutlet="verdictBadge; context: { v: ts.verdict, reason: ts.reason, tsa: ts.timestampAuthority }"
+                                    ></ng-container>
                                   }
                                 </div>
                               } @else {
@@ -247,3 +261,32 @@
     [(visible)]="showPackageDialog"
   />
 </div>
+
+<!-- Badge cho 1 verdict dấu thời gian — dùng chung cho từng chữ ký lẫn verdict cấp file (1 nguồn duy nhất). -->
+<ng-template #verdictBadge let-v="v" let-reason="reason" let-tsa="tsa">
+  @switch (v) {
+    @case (EVerdict.ValidTrusted) {
+      <span class="inline-flex items-center gap-1 text-xs font-medium text-green-600" [title]="tsa || ''">
+        <i class="pi pi-verified"></i> Hợp lệ
+      </span>
+    }
+    @case (EVerdict.NotApplicable) {
+      <span class="inline-flex items-center gap-1 text-xs font-medium text-amber-600" [title]="reason || ''">
+        <i class="pi pi-exclamation-triangle"></i> Không áp dụng
+      </span>
+    }
+    @default {
+      <span class="inline-flex items-center gap-1 text-xs font-medium text-red-600" [title]="reason || ''">
+        <i class="pi pi-times-circle"></i>
+        @switch (v) {
+          @case (EVerdict.NoTimestamp) { Không có }
+          @case (EVerdict.UntrustedTsa) { TSA không tin cậy }
+          @case (EVerdict.UntrustedSigner) { Người ký không tin cậy }
+          @case (EVerdict.InvalidSignature) { Nội dung bị sửa }
+          @case (EVerdict.TimeMismatch) { Giờ ký sau dấu thời gian }
+          @default { Không hợp lệ }
+        }
+      </span>
+    }
+  }
+</ng-template>

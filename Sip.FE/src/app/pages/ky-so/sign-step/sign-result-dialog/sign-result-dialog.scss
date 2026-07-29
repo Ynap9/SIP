@@ -1,0 +1,238 @@
+// Style riêng cho dialog kết quả ký số: hero full-bleed, ô số liệu, đường dẫn.
+// Light-only (Aura). Tailwind lo layout; scss lo phần trang trí (gradient/ring/tông màu theo status).
+:host {
+  display: block;
+}
+
+// Bỏ padding mặc định + bo góc để hero tràn sát mép dialog.
+:host ::ng-deep .sign-result-dialog {
+  overflow: hidden;
+  border-radius: 16px;
+
+  .p-dialog-content {
+    padding: 0;
+    border-radius: 16px;
+  }
+}
+
+.srd-card {
+  position: relative;
+  background: #ffffff;
+}
+
+// Nút đóng nổi góc phải hero.
+.srd-dismiss {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.85rem;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  border-radius: 9999px;
+  color: #64748b;
+  background: rgba(255, 255, 255, 0.65);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+
+  &:hover {
+    background: #ffffff;
+    color: #0f172a;
+  }
+}
+
+/* ===== Hero ===== */
+.srd-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 2.25rem 1.75rem 1.5rem;
+  // Nền gradient mặc định (success) – ghi đè theo data-tone bên dưới.
+  background: linear-gradient(180deg, #ecfdf5 0%, #ffffff 100%);
+}
+
+.srd-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 4.5rem;
+  height: 4.5rem;
+  margin-bottom: 1rem;
+  border-radius: 9999px;
+  color: #ffffff;
+  background: #16a34a;
+  box-shadow: 0 10px 22px -8px rgba(22, 163, 74, 0.6);
+
+  i {
+    font-size: 1.9rem;
+    font-weight: 700;
+  }
+
+  // Vòng sáng lan toả nhẹ quanh badge (hiệu ứng "premium").
+  &__ring {
+    position: absolute;
+    inset: -0.55rem;
+    border-radius: 9999px;
+    border: 3px solid rgba(22, 163, 74, 0.22);
+  }
+}
+
+.srd-title {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.srd-subtitle {
+  margin: 0.4rem 0 0;
+  max-width: 24rem;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  color: #64748b;
+}
+
+/* ===== Thân ===== */
+.srd-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+  padding: 0.25rem 1.75rem 1.5rem;
+}
+
+.srd-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+}
+
+.srd-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.9rem 0.5rem;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  text-align: center;
+
+  &__value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  &__label {
+    margin-top: 0.35rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #334155;
+  }
+
+  &__hint {
+    font-size: 0.72rem;
+    color: #94a3b8;
+  }
+
+  // Ô có số 0 -> làm nhạt để không "hét" lên khi không có bỏ qua/lỗi.
+  &--muted {
+    opacity: 0.55;
+    filter: grayscale(0.35);
+  }
+
+  &--green {
+    background: #f0fdf4;
+    border-color: #bbf7d0;
+    .srd-stat__value { color: #16a34a; }
+  }
+
+  &--amber {
+    background: #fffbeb;
+    border-color: #fde68a;
+    .srd-stat__value { color: #d97706; }
+  }
+
+  &--red {
+    background: #fef2f2;
+    border-color: #fecaca;
+    .srd-stat__value { color: #dc2626; }
+  }
+}
+
+/* ===== Đường dẫn thư mục ===== */
+.srd-path {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.8rem 0.9rem;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+
+  &__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 9px;
+    background: #e0e7ff;
+    color: #4f46e5;
+  }
+
+  &__text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0; // cho phép ellipsis hoạt động
+  }
+
+  &__label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #94a3b8;
+  }
+
+  &__value {
+    font-size: 0.9rem;
+    color: #1e293b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+/* ===== Footer ===== */
+.srd-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  padding: 1rem 1.75rem 1.4rem;
+  border-top: 1px solid #f1f5f9;
+}
+
+/* ===== Ghi đè tông màu theo trạng thái ===== */
+.srd-card[data-tone='warn'] {
+  .srd-hero { background: linear-gradient(180deg, #fffbeb 0%, #ffffff 100%); }
+  .srd-badge {
+    background: #d97706;
+    box-shadow: 0 10px 22px -8px rgba(217, 119, 6, 0.6);
+    .srd-badge__ring { border-color: rgba(217, 119, 6, 0.22); }
+  }
+}
+
+.srd-card[data-tone='error'] {
+  .srd-hero { background: linear-gradient(180deg, #fef2f2 0%, #ffffff 100%); }
+  .srd-badge {
+    background: #dc2626;
+    box-shadow: 0 10px 22px -8px rgba(220, 38, 38, 0.6);
+    .srd-badge__ring { border-color: rgba(220, 38, 38, 0.22); }
+  }
+}

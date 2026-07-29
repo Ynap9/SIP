@@ -1,4 +1,5 @@
 using Sip.be.Application.Document.Dtos.Check;
+using Sip.be.External.Documents.Dtos;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;

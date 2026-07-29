@@ -1,4 +1,4 @@
-# Đóng gói SIPPACK desktop (hướng C: .NET host WebView2 / Photino)
+﻿# Đóng gói SIPPACK desktop (hướng C: .NET host WebView2 / Photino)
 # Chạy: powershell -ExecutionPolicy Bypass -File build-desktop.ps1
 $ErrorActionPreference = 'Stop'
 
@@ -47,6 +47,78 @@ if (Test-Path $seedSrc) {
     Write-Host '   (Bỏ qua seed: không thấy Sip.be.Api/sip.db)' -ForegroundColor Yellow
 }
 
+# 5) Kiểm tra chứng thư CA đã ra output chưa.
+#    Tên file là load-bearing: SignatureVerifier nạp theo đúng tên trong SignatureConstants,
+#    thiếu file nào là nhánh chain đó null âm thầm -> MỌI file PDF bị chấm untrusted.
+Write-Host '==> Kiểm tra chứng thư CA (pinned)...' -ForegroundColor Cyan
+$crtRequired = @('rootcag2.crt', 'dcscag2.crt', 'cpg2.crt', 'rootca.crt', 'cp.crt')
+$crtMissing  = $crtRequired | Where-Object { -not (Test-Path (Join-Path $publish $_)) }
+if ($crtMissing) {
+    Write-Host "   THIẾU chứng thư: $($crtMissing -join ', ')" -ForegroundColor Red
+    Write-Host '   -> Đặt file vào Sip.be.Api/ rồi build lại, nếu không app sẽ coi mọi chữ ký là untrusted.' -ForegroundColor Red
+} else {
+    Write-Host "   Đủ $($crtRequired.Count)/$($crtRequired.Count) chứng thư (G1 + G2)." -ForegroundColor DarkGray
+}
+
+# 6) Kiểm tra bộ cài phụ thuộc cho USB token / ký số.
+#    KHÔNG copy vào publish: Inno Setup nhúng thẳng vào SIPPACK-Setup.exe rồi giải ra {tmp}
+#    và tự chạy im lặng lúc cài, nên thư mục cài của app không bị phình thêm ~92MB.
+Write-Host '==> Kiểm tra bộ cài phụ thuộc (USB token / ký số)...' -ForegroundColor Cyan
+$preqDir = Join-Path $root 'installer/prerequisites'
+$preq = [ordered]@{
+    'bit4id_xpki_1.4.10.764-ng-user-vgca-pkimgr-bwc.exe' = 'Bit4id Universal MW - middleware bắc cầu token vào Windows Cert Store'
+    'gca01-client-v2-x64-8.3.msi'                        = 'VGCA GCA01-Client v2 - trình điều khiển token Ban Cơ yếu'
+    'MicrosoftEdgeWebView2Setup.exe'                     = 'WebView2 Runtime - nhân hiển thị giao diện'
+}
+$preqMissing = @()
+foreach ($f in $preq.Keys) {
+    $p = Join-Path $preqDir $f
+    if (Test-Path $p) {
+        $mb = [math]::Round((Get-Item $p).Length / 1MB, 1)
+        Write-Host ("   [OK]     {0,-6} MB  {1}" -f $mb, $preq[$f]) -ForegroundColor DarkGray
+    } else {
+        $preqMissing += $f
+        Write-Host ("   [THIẾU]          {0}" -f $preq[$f]) -ForegroundColor Yellow
+    }
+}
+if ($preqMissing) {
+    Write-Host '   -> Installer vẫn compile được nhưng sẽ KHÔNG tự cài phần thiếu.' -ForegroundColor Yellow
+    Write-Host "   -> Đặt file vào: $preqDir" -ForegroundColor Yellow
+}
+
+# 7) Biên dịch installer bằng NSIS. Chọn NSIS vì giấy phép zlib/libpng cho phép dùng
+#    thương mại vô điều kiện, không license key và không chèn banner vào sản phẩm.
+Write-Host '==> Biên dịch installer (NSIS)...' -ForegroundColor Cyan
+$makensis = @(
+    "${env:ProgramFiles(x86)}\NSIS\makensis.exe",
+    "$env:ProgramFiles\NSIS\makensis.exe",
+    "$env:LOCALAPPDATA\Programs\NSIS\makensis.exe"
+) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+
+if ($makensis) {
+    Push-Location (Join-Path $root 'installer')
+    & $makensis /V2 'SIPPACK.nsi'
+    $nsisExit = $LASTEXITCODE
+    Pop-Location
+    if ($nsisExit -ne 0) { throw "NSIS biên dịch lỗi (mã $nsisExit)." }
+    $setup = Join-Path $root 'installer/installer-output/SIPPACK-Setup.exe'
+    Write-Host ("   {0} ({1} MB)" -f $setup, [math]::Round((Get-Item $setup).Length / 1MB, 1)) -ForegroundColor DarkGray
+} else {
+    Write-Host '   Không thấy makensis.exe -> bỏ qua bước tạo installer.' -ForegroundColor Yellow
+    Write-Host '   Cài NSIS (miễn phí): winget install --id NSIS.NSIS' -ForegroundColor Yellow
+}
+
+# 8) Đóng gói bản phát hành .zip, đặt cạnh các bản cũ ở thư mục gốc repo.
+#    Version lấy từ chính exe đã build để zip không bao giờ lệch tên với binary bên trong.
+Write-Host '==> Đóng gói bản phát hành (.zip)...' -ForegroundColor Cyan
+$ver = ((Get-Item (Join-Path $publish 'SIPPACK.exe')).VersionInfo.ProductVersion -split '\+')[0]
+$zip = Join-Path $repo "SIPPACK-v$ver-win-x64.zip"
+if (Test-Path $zip) { Remove-Item $zip -Force }
+Compress-Archive -Path (Join-Path $publish '*') -DestinationPath $zip -CompressionLevel Optimal
+Write-Host ("   {0} ({1} MB)" -f $zip, [math]::Round((Get-Item $zip).Length / 1MB, 1)) -ForegroundColor DarkGray
+
+Write-Host ''
 Write-Host "==> Xong. Thư mục app: $publish" -ForegroundColor Green
-Write-Host '   Chạy thử: ' + (Join-Path $publish 'SIPPACK.exe')
-Write-Host '   Tạo installer: biên dịch installer/SIPPACK.iss bằng Inno Setup.'
+Write-Host ('   Chạy thử: ' + (Join-Path $publish 'SIPPACK.exe'))
+Write-Host '   Installer tự cài Bit4id MW + GCA01-Client + WebView2 nếu máy đích chưa có,'
+Write-Host '   kiểm tra lại sau khi cài và báo rõ thành phần nào không cài được.'

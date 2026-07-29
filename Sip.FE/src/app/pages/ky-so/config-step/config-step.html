@@ -1,0 +1,324 @@
+<div class="flex flex-col gap-5">
+  <!-- Nguồn cần ký: phải chọn trước thì mới có PDF để xem trước và đặt chữ ký -->
+  <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <h2 class="mb-4 flex items-center gap-2 text-lg font-semibold text-slate-800">
+      <i class="pi pi-folder-open text-primary"></i>
+      Nguồn cần ký
+    </h2>
+
+    <div
+      class="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-6 transition-colors"
+      [ngClass]="isDragOver() ? 'border-primary bg-primary-50' : 'border-slate-300 bg-slate-50'"
+      (dragover)="onDragOver($event)"
+      (dragleave)="onDragLeave($event)"
+      (drop)="onDropFolder($event)"
+    >
+      <i class="pi pi-cloud-upload text-4xl text-slate-400"></i>
+      <span class="text-base text-slate-600">Kéo thả thư mục cần ký số vào đây</span>
+      <p-button
+        label="Chọn thư mục"
+        icon="pi pi-folder"
+        severity="secondary"
+        [outlined]="true"
+        (onClick)="chooseFolder()"
+      />
+    </div>
+
+    <div class="mt-4 flex items-center gap-2">
+      <input
+        pInputText
+        class="flex-1 text-base"
+        placeholder="Hoặc dán đường dẫn thư mục vào đây"
+        [ngModel]="sourcePath()"
+        (ngModelChange)="sourcePath.set($event)"
+      />
+      <p-button label="Xem trước" icon="pi pi-search" (onClick)="reloadFromPath()" />
+    </div>
+  </div>
+
+  <div class="grid grid-cols-12 gap-5">
+    <!-- ===== TRÁI: cấu hình ===== -->
+    <div class="col-span-12 flex flex-col gap-5 lg:col-span-3">
+      <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 class="mb-4 flex items-center gap-2 text-lg font-semibold text-slate-800">
+          <i class="pi pi-sliders-h text-primary"></i>
+          Cấu hình chữ ký
+        </h2>
+
+        <div class="flex flex-col gap-5">
+          <div class="flex items-start gap-2">
+            <p-checkbox
+              inputId="allowOverlap"
+              [binary]="true"
+              [ngModel]="allowOverlapContent()"
+              (ngModelChange)="allowOverlapContent.set($event)"
+            />
+            <label for="allowOverlap" class="text-base text-slate-700">
+              Cho phép chữ ký đè lên nội dung
+              <span class="mt-1 block text-sm text-slate-500">
+                Bỏ chọn nếu muốn chữ ký chỉ nằm ở khoảng trắng.
+              </span>
+            </label>
+          </div>
+
+          <div class="flex items-start gap-2">
+            <p-checkbox
+              inputId="perFile"
+              [binary]="true"
+              [disabled]="!currentFile()"
+              [ngModel]="perFileMode()"
+              (ngModelChange)="onPerFileModeChange($event)"
+            />
+            <label for="perFile" class="text-base text-slate-700">
+              Chỉ áp dụng cho file hiện tại
+              <span class="mt-1 block text-sm text-slate-500">
+                Bật để đặt chữ ký riêng cho đúng file đang xem, khởi điểm là các khối dùng chung. Sang file
+                khác ô này tự bỏ tích và file đó ký theo cấu hình chung; cấu hình chung không đổi dù bật hay
+                tắt.
+              </span>
+            </label>
+          </div>
+
+          <p-divider />
+
+          <div class="text-base text-slate-700">
+            <div class="flex items-center justify-between gap-2">
+              <span class="font-medium">
+                @if (perFileMode()) {
+                  Chữ ký riêng file này
+                } @else {
+                  Chữ ký dùng chung
+                }
+              </span>
+              <span class="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-600">
+                {{ currentPositions().length }} khối
+              </span>
+            </div>
+
+            @if (activePosition(); as pos) {
+              <div class="mt-3 flex flex-col gap-1 rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
+                <div class="flex justify-between gap-3">
+                  <span class="text-slate-500">Khối {{ activeIndex() + 1 }}</span>
+                  <span>Trang {{ pos.pageNumber }}</span>
+                </div>
+                <div class="flex justify-between gap-3">
+                  <span class="text-slate-500">Vị trí</span>
+                  <span>
+                    X {{ (pos.xRatio * 100).toFixed(1) }}% · Y {{ (pos.yRatio * 100).toFixed(1) }}%
+                  </span>
+                </div>
+                <div class="flex justify-between gap-3">
+                  <span class="text-slate-500">Kích cỡ</span>
+                  <span>{{ (blockScaleOf(pos) * 100).toFixed(0) }}% khổ gốc</span>
+                </div>
+              </div>
+
+              <div class="mt-2 flex flex-wrap items-center gap-1">
+                <p-button
+                  label="Kích cỡ gốc"
+                  icon="pi pi-refresh"
+                  severity="secondary"
+                  size="small"
+                  [text]="true"
+                  (onClick)="resetBlockSize()"
+                />
+                <p-button
+                  label="Xoá khối"
+                  icon="pi pi-times"
+                  severity="secondary"
+                  size="small"
+                  [text]="true"
+                  (onClick)="removeActiveBlock()"
+                />
+                @if (currentPositions().length > 1) {
+                  <p-button
+                    label="Xoá tất cả"
+                    icon="pi pi-trash"
+                    severity="danger"
+                    size="small"
+                    [text]="true"
+                    (onClick)="clearPositions()"
+                  />
+                }
+              </div>
+            } @else {
+              <div class="mt-3 text-sm text-slate-500">
+                Chưa đặt khối nào — kéo khối chữ ký bên phải thả vào trang PDF. Thả bao nhiêu khối, ở trang
+                nào là tuỳ ý.
+              </div>
+            }
+
+            @if (overrideCount() > 0) {
+              <div class="mt-4 rounded-lg bg-primary-50 p-3 text-sm text-slate-600">
+                <div class="font-medium text-slate-700">{{ overrideCount() }} file có cấu hình riêng</div>
+                <div class="mt-1">Các file còn lại ký theo {{ globalPositions().length }} khối dùng chung.</div>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== GIỮA: xem trước PDF (cuộn qua mọi trang) ===== -->
+    <div class="col-span-12 lg:col-span-6">
+      <div class="flex h-full flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="mb-4 flex items-center justify-between gap-2">
+          <div class="min-w-0">
+            <div class="truncate text-base font-semibold text-slate-800">
+              {{ currentFile()?.name || 'Chưa có file để xem trước' }}
+            </div>
+            <div class="text-sm text-slate-500">
+              @if (totalFiles() > 0) {
+                File {{ fileIndex() + 1 }}/{{ totalFiles() }}
+              }
+              @if (pages().length > 0) {
+                · {{ pages().length }} trang
+              }
+            </div>
+          </div>
+
+          <!-- Nút khoá theo hasPrev/hasNext để không bao giờ gọi quá đầu/cuối danh sách -->
+          <div class="flex shrink-0 items-center gap-1">
+            <p-button
+              icon="pi pi-angle-left"
+              severity="secondary"
+              [text]="true"
+              [disabled]="!hasPrev() || previewLoading()"
+              pTooltip="File trước"
+              (onClick)="prevFile()"
+            />
+            <p-button
+              icon="pi pi-angle-right"
+              severity="secondary"
+              [text]="true"
+              [disabled]="!hasNext() || previewLoading()"
+              pTooltip="File sau"
+              (onClick)="nextFile()"
+            />
+          </div>
+        </div>
+
+        <!-- Mọi trang xếp dọc trong một khung CUỘN: thả chữ ký vào trang nào là ký đúng trang đó -->
+        <div class="relative flex max-h-[70vh] flex-1 flex-col items-center gap-4 overflow-auto rounded-lg bg-slate-100 p-4">
+          @for (page of pages(); track page.number) {
+            <div
+              class="pdf-page"
+              [style.width.px]="page.cssWidth"
+              [style.height.px]="page.cssHeight"
+              (dragover)="onPageDragOver($event)"
+              (drop)="onPageDrop($event, page)"
+            >
+              <canvas #pdfCanvas class="block h-full w-full bg-white" [attr.data-page]="page.number"></canvas>
+              <span class="pdf-page__badge">Trang {{ page.number }}</span>
+
+              <!-- Khối vẽ đúng nội dung + tỉ lệ chữ của bản ký thật để nhìn là biết file ký ra sẽ thế nào.
+                   Kéo thân khối để dời chỗ, kéo 4 góc để đổi kích cỡ - không phải xoá đi thả lại. -->
+              @for (item of pagePositions(page.number); track item.index) {
+                <div
+                  class="sign-overlay"
+                  [class.sign-overlay--active]="item.index === activeIndex()"
+                  [style.left.%]="item.position.xRatio * 100"
+                  [style.top.%]="item.position.yRatio * 100"
+                  [style.width.%]="item.position.widthRatio * 100"
+                  [style.height.%]="item.position.heightRatio * 100"
+                  [style.font-size.px]="blockFontPx(item.position)"
+                  (pointerdown)="onBlockPointerDown($event, item.index, 'move')"
+                  (pointermove)="onBlockPointerMove($event)"
+                  (pointerup)="onBlockPointerUp($event)"
+                >
+                  <div class="sign-overlay__line">{{ certName() || 'Người ký' }}</div>
+                  <div class="sign-overlay__line sign-overlay__line--time">{{ previewTime }}</div>
+
+                  @for (corner of resizeCorners; track corner) {
+                    <span
+                      class="sign-overlay__handle sign-overlay__handle--{{ corner }}"
+                      (pointerdown)="onBlockPointerDown($event, item.index, corner)"
+                      (pointermove)="onBlockPointerMove($event)"
+                      (pointerup)="onBlockPointerUp($event)"
+                    ></span>
+                  }
+                </div>
+              }
+            </div>
+          } @empty {
+            <div class="flex h-40 items-center justify-center text-base text-slate-500">
+              Chọn thư mục để xem trước trang PDF.
+            </div>
+          }
+
+          @if (previewLoading()) {
+            <div class="absolute inset-0 flex items-center justify-center bg-white/60">
+              <i class="pi pi-spin pi-spinner text-3xl text-slate-500"></i>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== PHẢI: khối chữ ký mẫu để kéo thả ===== -->
+    <div class="col-span-12 lg:col-span-3">
+      <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 class="mb-2 flex items-center gap-2 text-lg font-semibold text-slate-800">
+          <i class="pi pi-pencil text-primary"></i>
+          Chữ ký
+        </h2>
+        <p class="mb-4 text-sm text-slate-500">
+          Kéo khối bên dưới thả vào trang PDF — chữ ký nằm đúng chỗ vừa thả, đúng trang vừa thả. Khối đã đặt
+          vẫn kéo dời chỗ được và kéo 4 góc để đổi kích cỡ.
+        </p>
+
+        <!-- Khối mẫu dựng giống bản ký thật: 2 dòng canh giữa, Times New Roman, khổ 170x30pt -->
+        <div
+          class="signature-block"
+          [class.signature-block--disabled]="!canPlace()"
+          [attr.draggable]="canPlace()"
+          (dragstart)="onSignatureDragStart($event)"
+        >
+          <div class="signature-block__line">{{ certName() || 'Người ký' }}</div>
+          <div class="signature-block__line signature-block__line--time">{{ previewTime }}</div>
+        </div>
+
+        <p class="mt-4 text-sm text-slate-500">
+          Khổ gốc 170×30pt. Không kéo góc thì giữ nguyên khổ gốc; kéo hay không kéo, vị trí và kích cỡ vẫn tự
+          co giãn theo khổ trang của từng file.
+        </p>
+
+        @if (!canPlace()) {
+          <p-message severity="info" text="Chọn thư mục để xem trước trang PDF trước khi đặt chữ ký." />
+        }
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Nút thao tác: ba nút cùng cỡ, cùng chiều cao ===== -->
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <p-button
+      label="Quay lại"
+      icon="pi pi-arrow-left"
+      severity="secondary"
+      [outlined]="true"
+      styleClass="w-44 justify-center"
+      (onClick)="onBack()"
+    />
+    <div class="flex flex-wrap items-center gap-3">
+      <p-button
+        label="Tự cấu hình"
+        icon="pi pi-bolt"
+        severity="secondary"
+        [outlined]="true"
+        styleClass="w-44 justify-center"
+        pTooltip="Dùng vị trí mặc định: góc trên-phải trang 1, tự co giãn theo khổ trang"
+        (onClick)="onAutoConfig()"
+      />
+      <p-button
+        label="Tiếp tục"
+        icon="pi pi-arrow-right"
+        iconPos="right"
+        styleClass="w-44 justify-center"
+        (onClick)="onContinue()"
+      />
+    </div>
+  </div>
+
+  <app-config-confirm-dialog [(visible)]="showConfirm" (save)="onSaveConfig()" />
+</div>

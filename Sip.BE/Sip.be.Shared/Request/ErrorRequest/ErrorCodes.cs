@@ -50,5 +50,36 @@ namespace Sip.be.Shared.Request.ErrorRequest
 
         //Dấu thời gian/chữ ký số của file PDF không hợp lệ (không có / TSA giả / lệch giờ)
         public const int TimestampInvalid = 1025;
+
+        //Nội dung file PDF đã bị sửa sau khi ký (chữ ký không khớp nội dung / có byte ngoài vùng ký)
+        public const int SignatureInvalid = 1026;
+
+        //Các mã lỗi cho luồng KÝ SỐ
+        //Không đọc được chứng thư số nào (chưa cắm token / chưa cài middleware / store rỗng)
+        public const int CertificateNotFound = 1027;
+        //Có chứng thư số nhưng không cái nào ký được (thiếu khóa bí mật / hết hạn / KeyUsage không cho ký)
+        public const int CertificateNotSignable = 1028;
+
+        //Không tìm thấy file/thư mục nguồn cần ký
+        public const int SignSourceNotFound = 1029;
+        //Nguồn không có file PDF nào để ký
+        public const int SignNoPdfFound = 1030;
+        //Chứng thư số không dùng để ký được (kiểm tra trước khi ký cả lô) -> dừng ngay, không ký file nào
+        public const int SignTokenInvalid = 1031;
+        //Ký file thất bại
+        public const int SignFailed = 1032;
+
+        //PDF được mã hóa (/Encrypt) -> ngoài phạm vi, không ký được mà không giải mã
+        public const int SignPdfEncrypted = 1033;
+        //PDF có chữ ký chứng thực /DocMDP /P 1 -> tác giả cấm mọi thay đổi sau đó, ký thêm là phá chữ ký cũ
+        public const int SignPdfLocked = 1034;
+        //Cấu trúc PDF không đọc được để ký nối bản (xref hỏng / dạng chưa hỗ trợ)
+        public const int SignPdfStructureUnsupported = 1035;
+
+        //File không đạt gate định dạng trước ký (không phải PDF / không phải PDF/A / không đủ 2 lớp / đọc hỏng)
+        public const int PdfFormatInvalid = 1036;
+
+        //Vị trí đặt chữ ký người dùng chọn không dùng được (thiếu tọa độ / sai trang / tràn ra ngoài trang)
+        public const int SignPositionInvalid = 1037;
     }
 }

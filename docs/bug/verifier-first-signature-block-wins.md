@@ -1,5 +1,7 @@
 # BUG: `SignatureVerifier` returns on the first signature block — later blocks are never examined
 
+> **Status: FIXED** — verified in code 2026-07-20: `Verify` collects every `/ByteRange` block, verifies every
+> `SignerInfo` of every block, and the file verdict is the **worst** one (`Rank`), not the first.
 > **Severity: HIGH — a forged signature hides behind a genuine one in a multi-signature PDF.**
 > Runtime-confirmed 2026-07-15. Contradicts [../verify-signature-timestamp.md](../verify-signature-timestamp.md) §7
 > ("Multi-signature PDFs: verify each signer independently"), which the code does not implement.

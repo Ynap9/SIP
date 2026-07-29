@@ -2,7 +2,7 @@
 
 > Research + runtime-test log for adding a **folder-based digital-signing** feature to SIPPACK by driving the
 > third-party **ToolSign** (NILER SIGN CLIENT) local service over HTTP. No SIPPACK code written yet.
-> Related: [ca-trust-certificates-g2.md](ca-trust-certificates-g2.md), [verify-signature-timestamp.md](verify-signature-timestamp.md).
+> Related: [ca-trust-certificates.md](ca-trust-certificates.md), [verify-signature-timestamp.md](verify-signature-timestamp.md).
 
 ## 1. What ToolSign is
 `ToolSignClient.exe` — a **.NET 5** hybrid app (WinForms tray UI **+** self-hosted ASP.NET Core Web API with Swagger).

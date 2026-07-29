@@ -14,8 +14,15 @@ Do not start work until you have read and understood the docs relevant to your t
 
 When your change alters a pattern any of these documents describe, **update that document** in the same task.
 
+## Agents & session workflow
+Start every session with the **`session-workflow`** skill (`.claude/skills/session-workflow/SKILL.md`). In short:
+`sip-project-guide` loads project knowledge → tasks route to **`sip-be`** (`Sip.BE/**`) and/or **`sip-fe`**
+(`Sip.FE/**`), BE first on full-stack work via a contract in `.claude/contracts/` → `/sip-review` calls
+**`sip-reviewer`** (writes to `.claude/review/`) → `/sip-end` has `sip-project-guide` re-learn and report drift.
+File ownership between `sip-be` and `sip-fe` is **exclusive**; neither edits the other's tree.
+
 ## What this is
-SIPPACK — a **desktop** app to **check** and **pack** archival documents into SIP packages per the Vietnamese **TT05/2025/TT-BNV** standard (E-ARK CSIP variant). One process hosts an ASP.NET Core API + an Angular SPA (Photino host); local **SQLite** DB.
+SIPPACK — a **desktop** app to **check**, **pack**, **unpack** and **digitally sign** archival documents per the Vietnamese **TT05/2025/TT-BNV** SIP standard (E-ARK CSIP variant). One process hosts an ASP.NET Core API + an Angular SPA (Photino host); local **SQLite** DB.
 
 ## Repo map
 ```
@@ -25,10 +32,14 @@ docs/        Domain/standard docs (TT05 spec, DB design, desktop packaging plan)
 .claude/     BE + FE architecture docs, and the moved FE docs/plans/skills
 ```
 
-## The three flows (BE ↔ FE mirror each other)
+## The flows (BE ↔ FE mirror each other)
 - **Config** — import Excel → `ConfigHoSo`/`ConfigVanBan`; list them (`pages/config`).
-- **Check** — validate one record folder in 3 stages, **streamed realtime over SSE** (`pages/dong-goi/check`).
-- **Pack** — build a SIP package (EAD.xml + METS.xml + ZIP); **nothing persisted to DB** (`pages/dong-goi`).
+- **Check** — validate one record folder in 3 stages, **streamed realtime over SSE** (`pages/dong-goi/check`); **multi** validates a parent folder of many hồ sơ (`pages/dong-goi/multi`).
+- **Pack** — build a SIP package (EAD.xml + METS.xml + ZIP); **nothing persisted to DB** (`pages/dong-goi`); **multi** packs a parent folder (SSE).
+- **Unpack** — reverse a SIP `.zip`/folder back into a hồ sơ folder + Excel (`pages/boc-tach`).
+- **Sign** — pick a certificate (incl. USB token), gate PDF/A, sign a folder with a Ban Cơ yếu RFC 3161 timestamp, SSE per file (`pages/ky-so`).
+
+Multi + Unpack rules: [`docs/multi-unpack-flows.md`](docs/multi-unpack-flows.md). Signature/timestamp: [`docs/verify-signature-timestamp.md`](docs/verify-signature-timestamp.md).
 
 ## Golden rules
 1. **Do exactly what is asked** — don't refactor or change architecture on your own.

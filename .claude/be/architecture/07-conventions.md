@@ -12,6 +12,9 @@
 - Code comments and XML `<summary>` docs are written in **Vietnamese** in this codebase (domain is Vietnamese archival law). Match the surrounding style when editing existing files.
 - Write dense `<summary>` docs on service interface methods explaining the business steps — future readers rely on them.
 
+## Date & time
+- **Never call `DateTime.Now` / `DateTime.Today`.** Services use the inherited `BaseService.VietnamNow`; other layers use `DateTimeConstants.VietnamNow`. Full rule + exceptions in [08-datetime.md](08-datetime.md).
+
 ## Layering rules (enforce the dependency direction)
 - Controllers do **no** business logic — delegate to services.
 - Services depend on `SipDbContext` directly (no repository layer).

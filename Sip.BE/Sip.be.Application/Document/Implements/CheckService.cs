@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Sip.be.Application.Base;
 using Sip.be.Application.Document.Dtos.Check;
+using Sip.be.External.Documents.Dtos;
 using Sip.be.Application.Document.Interfaces;
 using Sip.be.Domain.Document;
 using Sip.be.Domain.Documents;
@@ -23,6 +24,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
+using Sip.be.External.Documents.Interfaces;
 
 namespace Sip.be.Application.Document.Implements
 {

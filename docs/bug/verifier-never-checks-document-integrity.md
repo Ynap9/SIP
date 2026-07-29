@@ -1,5 +1,8 @@
 # BUG: `SignatureVerifier` never checks document integrity — any content can be swapped under a genuine timestamp
 
+> **Status: FIXED** — verified in code 2026-07-20: `VerifySigner` runs `signer.CheckSignature(verifySignatureOnly:
+> true)` against the detached content of both `/ByteRange` gaps, then rejects an insane `/ByteRange` (`RangeSane`)
+> and any bytes past the outermost signature (EOF check). All three emit `InvalidSignature`.
 > **Severity: CRITICAL — the `ValidTrusted` verdict is forgeable by copy-paste.** Runtime-confirmed 2026-07-15 on
 > the real sample files + real G2 certs. Covers the "tamper" and the "transplant" variants (same root cause).
 > Spec: [../verify-signature-timestamp.md](../verify-signature-timestamp.md).

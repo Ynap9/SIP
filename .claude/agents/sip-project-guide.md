@@ -17,9 +17,10 @@ standard (E-ARK CSIP v2.0.4 variant). Local **SQLite** DB stores **only** two co
 (`ConfigHoSo`, `ConfigVanBan`) — package data is **never** persisted. User = the main dev at SaoMaiSolutions.
 
 ## 2. Repo map
-- `Sip.BE/` — ASP.NET Core Clean Architecture: `Sip.be.Api` (controllers, `Program.BuildApp`), `Sip.be.Application`
-  (services + DTOs, the heart), `Sip.be.Domain` (2 POCOs), `Sip.be.Infratructure` (**misspelled**, EF SQLite),
-  `Sip.be.Shared` (ApiResponse, ErrorCodes, Constants, xsd schemas), `Sip.be.External` (PDF signature read/verify),
+- `Sip.BE/` — ASP.NET Core Clean Architecture: `Sip.be.Api` (5 controllers: Config/Check/Pack/Unpack/Sign,
+  `Program.BuildApp`), `Sip.be.Application` (services + DTOs, the heart), `Sip.be.Domain` (2 POCOs),
+  `Sip.be.Infratructure` (**misspelled**, EF SQLite), `Sip.be.Shared` (ApiResponse, ErrorCodes, Constants, xsd
+  schemas), `Sip.be.External` (PDF signature read/verify **and** signing, TSA client, cert store, PDF/A inspector),
   `Sip.Desktop` (Photino host reusing `BuildApp`). Target `net9.0`.
 - `Sip.FE/` — Angular 21 (standalone + signals, no NgModules), PrimeNG 21 (Aura, light-only), Tailwind v4. Root
   files in `src/` (not `src/app/`). Pages lazy-loaded via `<feature>.router.ts`.
@@ -31,25 +32,31 @@ standard (E-ARK CSIP v2.0.4 variant). Local **SQLite** DB stores **only** two co
   realtime via **SSE** (`POST check/ho-so-folder`). Per-file PDF signature + trusted-timestamp verify.
 - **Pack (single)** — build SIP (EAD.xml + EAD_DOC_*.xml + METS.xml ×2 + schemas + ZIP), no DB (`POST pack/ho-so-folder`).
 - **Multi check/pack** and **Unpack (bóc tách)** — see [../../docs/multi-unpack-flows.md](../../docs/multi-unpack-flows.md).
+- **Sign (ký số)** — list certs incl. USB token, token pre-flight, **PDF preview** (`sign/xem-truoc` + `sign/xem-file`),
+  PDF/A gate (SSE), sign a folder (SSE) with a Ban Cơ yếu RFC 3161 timestamp; output `{name}_daky_{yyyyMMdd_HHmmss}.pdf`
+  beside the original. FE `pages/ky-so` is a **3-step wizard**: cert → **cấu hình chữ ký** → ký.
+  Signature placement is chosen **once for the whole folder** and sent as **ratios 0..1 of the page**, so each file
+  re-derives the box from its own `/MediaBox` — see [../contracts/sign-placement.contract.md](../contracts/sign-placement.contract.md).
 - SSE is **POST** `text/event-stream` → FE reads with `fetch`+ReadableStream (EventSource is GET-only).
 
 ## 4. Where to read (canonical, read these before answering)
 | Topic | File |
 |---|---|
 | Golden rules, build/run | `CLAUDE.md` |
-| BE architecture (7 files) | `.claude/be/architecture/README.md` + `01`–`07` |
+| BE architecture (8 files) | `.claude/be/architecture/README.md` + `01`–`08` |
 | FE architecture (5 files) | `.claude/fe/architecture/README.md` + `01`–`05` |
 | FE structure / UI / skills / plans | `.claude/fe/docs/` (`project-structure.md`, `ui-guidelines.md`, `skills/`, `plans/`) |
 | TT05 standard **+ real-package deviations (§8 = source of truth)** | `docs/chuan-dong-goi-sip-tt05.md` |
 | Proposed DB schema (HoSo/TaiLieu/DanhMuc — **not implemented**) | `docs/thiet-ke-db-dong-goi-sip.md` |
 | Multi + Unpack business | `docs/multi-unpack-flows.md` |
 | Digital-signature trusted timestamp | `docs/verify-signature-timestamp.md` (VN: `verify-chu-ky-so-dau-thoi-gian.md`) |
-| VGCA G2 trust certs (Root + Party/State intermediates) | `docs/ca-trust-certificates-g2.md` |
+| VGCA trust certs (G1 signer branch + G2 TSA branch) | `docs/ca-trust-certificates.md` |
 | ToolSign signing-feature research & decompile findings (**rejected — see §6**) | `docs/toolsign-integration.md` |
-| **Verifier is forgeable — plans to fix (not implemented)** | `docs/plans/verify-signature-hardening.plan.md`, `docs/plans/signer-trust-gate.plan.md` |
-| **Own PDF signer plan (not implemented)** | `docs/plans/pdf-signing.plan.md` |
+| Verifier hardening + signer gate (**implemented**; open: regression fixtures) | `docs/plans/verify-signature-hardening.plan.md`, `docs/plans/signer-trust-gate.plan.md` |
+| Own PDF signer (**implemented**; the root plan is partly superseded) | `docs/plans/pdf-signing.plan.md`, `.claude/be/plans/{pdf-signing-be.plan.md, pdf-signing-be.decisions.md, pdf-incremental-signing.plan.md, pdfa-precheck-be.plan.md}` |
 | Desktop packaging plan | `docs/desktop-packaging.plan.md` |
-| Known bugs / pitfalls | `docs/bug/*.md` — the four `verifier-*.md` + `signer-chain-*.md` are **live, unfixed** |
+| Known bugs / pitfalls | `docs/bug/*.md` — all fixed except `verifier-ltv-doctimestamp-not-implemented.md` (**open**) |
+| BE ↔ FE API contracts (read before touching either side) | `.claude/contracts/*.contract.md` — `sign-flow`, **`sign-placement`**, `pdfa-precheck`, `signature-verify` |
 
 ## 5. Load-bearing quirks (never "fix" these)
 - Misspelled project/namespace **`Infratructure`** (lowercase `Sip.be.infratructure.Persistence`).
@@ -63,57 +70,53 @@ standard (E-ARK CSIP v2.0.4 variant). Local **SQLite** DB stores **only** two co
   No repository layer (services use `SipDbContext` directly). Code comments are Vietnamese; **docs are English**.
 - FE: pages `extends BaseComponent`; state via signals; `inject()` not constructor DI; native actions guarded by
   `DesktopService.isDesktop` with a browser fallback; normalize pasted paths with `Utils.normalizeFolderPath`.
-- Signature/timestamp: pin **Root CA G2** (`F04BA4B4…`) as the only trust anchor; the two G2 intermediates
-  (`cpg2.crt` = State-agency CA, `dcscag2.crt` = Party-agency CA) are pinned into the chain **ExtraStore** so leaves
-  resolve to Root G2 even when the token omits them (`SignatureConstants.IntermediateCaPins`,
-  `SignatureVerifier.ChainsToRoot`; gitignored, copied via `Sip.be.Api.csproj`). Apply the **VGCA +7h genTime**
-  correction or every genuine file is wrongly rejected. Signature info **does not block** packing; a non-`VALID_TRUSTED` PDF does.
-- **Two CA generations, different jobs**: **G2** anchors the **TSA** (timestamp) chain — that is all the verifier
-  checks today. **G1** (`cp.crt` = `CN=Co quan chung thuc so Chinh phu`, pin `75E969C0…`, gitignored) anchors the
-  **signer** chain; production tokens are G1, and real signer certs embed **only the leaf**, so `cp.crt` must go in
-  `ExtraStore`. Root G1 is **not needed** — .NET refuses a non-self-signed anchor, so the design pins `cp.crt`
-  manually (see `docs/plans/signer-trust-gate.plan.md`).
+- Signature/timestamp: **two pinned branches, two jobs.** Root **G2** (`F04BA4B4…`) anchors the **TSA** chain;
+  Root **G1** anchors the **signer** chain (production tokens are G1 — tried first, G2 accepted too). Intermediates
+  (`cp.crt` G1; `cpg2.crt` State-agency, `dcscag2.crt` Party-agency G2) are pinned into the chain **ExtraStore**
+  because real certs embed only the leaf (`SignatureConstants`, `SignatureVerifier.ChainsToRoot`; all five files
+  gitignored, copied via `Sip.be.Api.csproj` — **file names are load-bearing**). Chains build at the **raw genTime**
+  (never `Now`, never offset — the 7h skew on legacy files belongs to the signer's `signingTime`, not the TSA).
+  G1/G2 is the PKI **generation**, not agency-vs-individual. Signature info **does not block** packing; a
+  non-`ValidTrusted` PDF does.
 
-## 5b. ⚠️ `SignatureVerifier` is forgeable today (runtime-proven 2026-07-15, unfixed)
-Never present `ValidTrusted` as proof of authenticity. It proves only *"a genuine VGCA TSA timestamped **some**
-signature value"*. Four confirmed bugs, each with a `docs/bug/*.md` and a fix plan:
-- **No document integrity** — `CheckSignature` is called **nowhere** in the BE; the `/ByteRange` content bytes are
-  never read. A 1-byte edit of a real file stays `ValidTrusted`; a genuine CMS blob copy-pasted into an unrelated
-  12 KB fake file also scores `ValidTrusted`. → `verifier-never-checks-document-integrity.md`
-- **First signature block wins** — `Verify` returns on the first block; swapping two blocks flips the file verdict.
-  A forged signature hides behind a genuine one. Rule (decided): verify **every** signature, **all** must pass,
-  worst verdict wins. → `verifier-first-signature-block-wins.md`
-- **Chain validated at `DateTime.Now`** — `VerificationTime` is never set, so expired-but-genuine TSA/signer certs
-  are rejected. Dated cliff: the sample signer cert dies **2026-09-25**. → `verifier-chain-verification-time-defaults-to-now.md`
-- **Signer chain never checked at all** — only the TSA's. A self-signed cert reproducing the real subject verbatim
-  (CN/O/OU **and MST**) is indistinguishable by any field. Subject fields are attacker-controlled text; identity
-  means nothing until a pinned CA vouches. Pitfall when fixing: `ChainElements` containing the pinned CA is **not**
-  sufficient — require `Build()==true` **and** the pin. → `signer-chain-pinned-ca-presence-is-not-enough.md`
+## 5b. What `ValidTrusted` means (verifier hardened 2026-07-20/21)
+`SignatureVerifier` now verifies **every** signature of **every** block, and the file verdict is the **worst** one
+(`InvalidSignature` > `UntrustedSigner` > `UntrustedTsa` > `NoTimestamp` > `TimeMismatch` > `ValidTrusted` >
+`NotApplicable`). `ValidTrusted` therefore means: unmodified since signing (`CheckSignature` over the two signed
+ranges + `/ByteRange` cannot lie + the outermost signature reaches EOF), signed by a cert chaining to a pinned
+Ban Cơ yếu root, at a time proven by a TSA chaining to Root G2, judged at the raw `genTime`. Fail-closed: a block
+that does not decode ⇒ `InvalidSignature` (never skipped); a missing pinned CA file ⇒ everything untrusted.
+- **Open gap**: PAdES-**LTV** `/DocTimeStamp` is still unimplemented (`docs/bug/verifier-ltv-doctimestamp-not-implemented.md`)
+  — such a file is wrongly rated `NoTimestamp`. Also open: no committed regression fixtures (hardening plan step 6),
+  and signer-trust-gate step 4 (a forged cert *claiming* the pinned CA) is unproven.
+- Pitfall to keep: a chain must `Build()==true` **and** match the pin — `ChainElements` containing the pinned CA is
+  **not** enough (`docs/bug/signer-chain-pinned-ca-presence-is-not-enough.md`).
 - Domain facts settled while investigating: TT05 mandates **nothing** about signature count (`inforSign` =
   "Ký hiệu thông tin", `autograph` = "Bút tích" — neither is a digital signature); a signed PDF normally has **2
   revisions** (the signature *is* an incremental update), so incremental update is **not** a tamper signal; and a
   non-outermost signature legitimately does **not** reach EOF.
 
-## 6. Code is ahead of the arch docs
-The `.claude` arch docs describe the three single flows; the code has since grown (verify in-repo before relying on
-docs): **Unpack** (`UnpackController`/`UnpackService`, FE `boc-tach` + `file-tree`), **Multi check/pack**
-(`CheckMultiFolderAsync`/`PackMultiFolderAsync`, FE `dong-goi/multi`), and **signature verify** moved to
-`Sip.be.External` (`PdfSignatureReader` + `SignatureVerifier`, DI'd via `IPdfSignatureReader`/`ISignatureVerifier`).
-`docs/multi-unpack-flows.md` covers the first two. When a doc and the code disagree, **trust the code and say so**.
+## 6. Signing is implemented — how, and what is still open
+**`Sip.be.External` is self-contained since 2026-07-28**: `Documents/{Interfaces,Implements,Dtos}`, one type per DTO
+file, and it no longer references Application — the dependency runs **Application → External**. Application keeps only
+its own service interfaces + wire DTOs and maps them onto External DTOs at the boundary.
 
-**Planned, no code yet — folder-based signing** (`docs/plans/pdf-signing.plan.md`). **ToolSign was rejected**:
-decompilation showed it **never applies an RFC 3161 timestamp** (TSA client built then discarded —
-`SignDetached(… tsaClient=null)`) and returns a spurious `-1` from forcing PDF/A-1A on non-PDF/A input; plus a
-commercial licence and a .NET 5 (EOL) sidecar. Decision: **build our own** — BCL alone covers CMS signing,
-`Rfc3161TimestampRequest`, and attaching the token; only the **PDF incremental-update writer** must be hand-rolled
-(no iText7 — AGPL/paid). Note `signingCertificateV2` (ESS) is **not** added by .NET and must be hand-built, or
-Adobe/Foxit may reject a file SIPPACK's own verifier accepts. ToolSign remains useful as a **fixture generator**
-(re-signing preserves sig#1 and adds an untimestamped sig#2 — the missing multi-signature test file).
+Own stack (ToolSign rejected — never timestamps; kept only as a fixture generator, see §4):
+`CertificateProvider` + `StoreSigningKey` (Windows CNG; PIN never read/stored, only a key handle cached per batch),
+`TimestampClient`, **`SignaturePlacementResolver`** (pure math: ratios → points against the page's real `/MediaBox`,
+block + font scaled from the 170×30pt reference so one choice fits every paper size; N pages = **one** field with N
+widget kids ⇒ one TSA call, and a short file is stamped on all the pages it has — never an error), `PdfSigner` +
+**`PdfIncrementalSigner`** — hand-written because **PDFsharp rewrites the file and kills existing signatures**
+(`docs/bug/pdfsharp-rewrites-document-destroying-existing-signature.md`); PDFsharp only draws the appearance XObject.
+`signingCertificateV2` (ESS) is hand-built with `AsnWriter` — .NET omits it and Adobe/Foxit may then reject a file our
+own verifier accepts. Pipeline: prepare (parallel) → key (**serial**, one hardware session) → timestamp + write
+(parallel); pulling the token aborts the batch; every output is re-verified before counting as success.
 
-**Verifier hardening is planned but unstarted** — see §5b. Two plans, deliberately split by blocker:
-`verify-signature-hardening.plan.md` (document integrity; runnable now) and `signer-trust-gate.plan.md` (signer
-identity; needed `cp.crt`, now downloaded + pin-verified). They are two legs of one stool: without the signer gate,
-an attacker self-signs an appended revision and still scores `ValidTrusted`.
+**Still open**: no real-USB-token run of the incremental signer; the multi-page `/Kids` layout not yet opened in
+Adobe/Foxit; the page-content detector behind `allowOverlapContent` deliberately unbuilt (slow + inaccurate); the
+verification harness (plan step 6) uncommitted.
+
+When a doc and the code disagree, **trust the code and say so**.
 
 ## 7. How to answer
 1. Identify what the caller needs; read the matching row(s) in §4 (and the relevant source under `Sip.BE`/`Sip.FE`).

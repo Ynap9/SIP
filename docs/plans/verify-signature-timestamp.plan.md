@@ -8,13 +8,16 @@
   out-of-band from `http://ca.gov.vn/pki/pub/crt/rootcag2.crt`). The **SHA-256 pin lives in code** as the source of
   truth: `F04BA4B459A7C9A1B971AD9B1CB833E695A80C79AEA63B174B66A70EDFE2FDB8`. Cert file is validated against it on load.
 - Per-attachment PDF (reuse the Check flow's `attachment/` scan). Non-PDF → `N/A`.
-- Verified facts (13 real files): PAdES `ETSI.CAdES.detached`; TSA `Máy chủ cấp dấu thời gian 02`; token `genTime`
-  stored **7h behind true UTC** → must add +7h before comparing to `signingTime`.
+- Verified facts (13 real files): PAdES `ETSI.CAdES.detached`; TSA `Máy chủ cấp dấu thời gian 02`; `signingTime` runs
+  ~7h ahead of `genTime`.
+  > **Superseded 2026-07-21.** This plan attributed that gap to the TSA and added +7h to `genTime`. Wrong side:
+  > `genTime` is true UTC, the *signer* writes local time into `signingTime`. See
+  > [../bug/genTime-offset-compensates-on-the-wrong-side.md](../bug/genTime-offset-compensates-on-the-wrong-side.md).
 
 ## Steps
 1. **Constants + asset wiring.** New `Sip.be.Shared/Constants/Documents/SignatureConstants.cs`: pin SHA-256, cert
    file name `rootcag2.crt`, OIDs (timestamp `1.2.840.113549.1.9.16.2.14`, signingTime `1.2.840.113549.1.9.5`, EKU
-   `1.3.6.1.5.5.7.3.8`), `VgcaGenTimeOffsetHours=7`, `ToleranceSeconds=300`. In `Sip.be.Api.csproj` add
+   `1.3.6.1.5.5.7.3.8`), `SignerLocalTimeQuirkHours=7`, `ToleranceSeconds=300`. In `Sip.be.Api.csproj` add
    `<Content Include="rootcag2.crt"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>`. `dotnet build`.
    - *Decision:* fingerprint pin (code) is the trust root; the `.crt` file is only material, rejected if hash ≠ pin.
 2. **DTO.** `Dtos/Check/TimestampVerifyDto.cs` + enum `TimestampVerdict` (`ValidTrusted`, `NoTimestamp`,
@@ -43,12 +46,12 @@
 
 ## Expected output
 - Every attachment PDF gets a `TimestampVerdict`; the FE check table shows a "Dấu thời gian" badge with TSA + trusted
-  time. On the 13 sample files all resolve to `ValidTrusted` (delta −2s…−131s after +7h).
-- No genuine VGCA file is rejected (the +7h correction is applied); a missing / forged / foreign-TSA timestamp is a
-  hard error that **blocks packing**.
+  time. On the 13 sample files all resolve to `ValidTrusted` (residual −2s…−131s once the 7h signer skew is allowed).
+- No genuine file is rejected; a missing / forged / foreign-TSA timestamp is a hard error that **blocks packing**.
 
 ## Decisions
-- **+7h VGCA correction** is mandatory (measured); never compare raw UTC with a tight tolerance.
+- **The 7h allowance is mandatory (measured)** — but it belongs on the `signingTime` comparison, never added to
+  `genTime` (see the Superseded note above); never compare raw UTC with a tight tolerance and no allowance.
 - Native `System.Security.Cryptography.Pkcs` (net9 → `Rfc3161TimestampToken` available); zero-dep like `PdfSignatureReader`.
 - **Offline**: OCSP/CRL revocation out of scope for v1; pin Root G2 by SHA-256; TSA cert read from the token (not pinned).
 - Cert file **gitignored**; must be present at build/deploy (installer step) — pin constant guards integrity.

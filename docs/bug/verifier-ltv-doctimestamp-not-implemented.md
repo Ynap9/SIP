@@ -50,7 +50,7 @@ Handle the `/DocTimeStamp` case in the scan loop, keeping fail-closed behaviour:
 - While scanning `/ByteRange` blocks, read the surrounding signature dict (as `PdfSignatureReader.ParseDictString`
   already does with a look-back window) to detect `/Type /DocTimeStamp` + `/SubFilter /ETSI.RFC3161`.
 - For such a block, `/Contents` **is** the RFC 3161 token: `Rfc3161TimestampToken.TryDecode` it directly, then verify
-  it binds the *document signature* it covers, chain the TSA to the pinned Root G2, and apply the +7h correction —
+  it binds the *document signature* it covers, chain the TSA to the pinned Root G2 at the raw `genTime` —
   the same trust rules as PAdES-T, only the token's location differs.
 - Reuse the same verdict table; do not add an LTV-specific verdict.
 

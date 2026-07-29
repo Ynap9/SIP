@@ -24,8 +24,16 @@
   Kestrel host directly.
 - **D4 — SQLite at `%AppData%/SipPack/sip.db`** (not inside the install dir, to avoid write-permission issues).
   Set the connection string at runtime; create the folder if missing; run `Database.Migrate()` at startup.
-- **D5 — Publish self-contained win-x64**; installer via Inno Setup (or WiX/MSIX) + icon + name "SIPPACK";
-  embed the WebView2 bootstrapper (auto-install if the machine lacks it).
+- **D5 — Publish self-contained win-x64**; installer built with **NSIS**. The setup **embeds and silently runs**
+  every dependency the target machine may lack, so there is no manual install step and no readme: WebView2
+  Runtime, **Bit4id Universal MW** and **VGCA GCA01-Client v2** (the token middleware that bridges the USB token
+  into the Windows Certificate Store — without it the Sign wizard lists no certificate). Rationale: the signing
+  feature is useless on a machine without token middleware, and end users cannot be relied on to install it.
+- **D5a — NSIS, not Inno Setup.** Inno Setup 6.7's compiler prints `Non-commercial use only` and its binaries
+  carry `LicenseKey` / `Licensee name:` strings, i.e. a paid commercial tier — even though the bundled
+  `license.txt` is still the old permissive text. That ambiguity is not worth carrying in a shipped product.
+  NSIS is zlib/libpng licensed: commercial use is unconditional, no key, no banner. It is also the engine the
+  bit4id installer itself uses.
 
 ## Steps
 1. **FE desktop mode**: `environment.desktop.ts` (`baseUrl:''` same-origin) + a `desktop` build config
@@ -44,9 +52,25 @@
 6. **Project `Sip.Desktop`**: reference `Sip.be.Api` + Photino.NET; `Main()`: set the AppData connection string →
    `BuildApp` → bind a free port → `StartAsync` (background) → open `PhotinoWindow` at the URL + a
    `WebMessageReceived` handler (pickFolder/openPath) → `WaitForClose` → shutdown. `dotnet build`.
-7. **Publish + installer**: script `ng build --configuration desktop` (copy `dist` → `Sip.be.Api/wwwroot`) +
-   `dotnet publish Sip.Desktop -c Release -r win-x64 --self-contained true` → Inno Setup `installer.iss`
-   produces `SIPPACK-Setup.exe` (icon, shortcut, embedded WebView2 bootstrap). Test on a clean machine.
+7. **Publish + installer** (DONE, v2.2.0): `Sip.BE/build-desktop.ps1` is now the whole pipeline — Angular desktop
+   build → `dotnet publish -r win-x64 --self-contained -p:PublishSingleFile=true` → `publish/` → verify the 5
+   pinned CA `.crt` files and the 3 dependency installers → `makensis SIPPACK.nsi` → `SIPPACK-v<ver>-win-x64.zip`.
+   Output: `installer-output/SIPPACK-Setup.exe` (~137 MB) and a ~57 MB install dir.
+
+   Dependency installers live in `Sip.BE/installer/prerequisites/` (binaries gitignored), are embedded in the
+   setup, extracted to `$PLUGINSDIR` and run silently: `/S` (bit4id, itself NSIS), `msiexec /qn /norestart /l*v`
+   (GCA01-Client), `/silent /install` (WebView2). `$PLUGINSDIR` is auto-deleted, so the install dir does not grow.
+
+   **Detection uses exact identifiers, never display-name matching** — the GCA01 ProductCode
+   `{648B71AE-68FC-45D4-B1A3-21BC86229A73}` read from the MSI Property table, the `SOFTWARE\bit4id` registry
+   branch (32-bit view), and the WebView2 EdgeUpdate client GUID. The same detection runs **again after** each
+   install, so success is judged by real machine state rather than by the installer's exit code; anything still
+   missing is listed in one message box and logged to `install-logs/`.
+
+   **`.ps1` and `.nsi` must be saved as UTF-8 *with BOM*** — Windows PowerShell 5.1 reads a BOM-less file as ANSI,
+   which mangles the Vietnamese strings and breaks parsing.
+
+   Still to do: end-to-end test on a clean machine (Windows Sandbox or a VM).
 
 ## Expected output
 - New: `Sip.Desktop/` (Photino host), `DesktopController` + 2 endpoints,

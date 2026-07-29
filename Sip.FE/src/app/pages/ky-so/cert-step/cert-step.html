@@ -1,0 +1,129 @@
+<div class="flex flex-col gap-4">
+  <!-- Chọn chứng thư số dùng để ký -->
+  <div class="rounded-lg border border-slate-200 p-4">
+    <div class="flex flex-wrap items-end justify-between gap-4">
+      <div class="flex min-w-0 flex-1 flex-col gap-2">
+        <label class="text-sm font-semibold text-slate-700">Chứng thư số dùng để ký</label>
+        <p-select
+          [options]="rows()"
+          [ngModel]="selectedThumbprint()"
+          optionValue="thumbprint"
+          placeholder="Chọn chứng thư số"
+          [filter]="true"
+          filterBy="commonName,serialNumber,issuerCommonName"
+          [showClear]="true"
+          class="w-full max-w-xl"
+          (onChange)="onSelectCert($event.value)"
+        >
+          <!-- Nhãn dòng: kèm badge nguồn + cảnh báo ngay trong danh sách để không phải chọn rồi mới biết -->
+          <ng-template pTemplate="item" let-cert>
+            <div class="flex w-full items-center justify-between gap-3">
+              <div class="flex min-w-0 flex-col">
+                <span class="truncate font-medium">{{ cert.commonName || cert.subject }}</span>
+                <span class="truncate text-xs text-slate-500">{{ cert.issuerCommonName }}</span>
+              </div>
+              <div class="flex shrink-0 items-center gap-2">
+                <p-tag [value]="cert.sourceLabel" [severity]="cert.canSign ? 'success' : 'secondary'" />
+                @if (!cert.canSign) {
+                  <i class="pi pi-exclamation-triangle text-amber-500" [pTooltip]="cert.reason"></i>
+                }
+              </div>
+            </div>
+          </ng-template>
+
+          <ng-template pTemplate="selectedItem" let-cert>
+            <span class="truncate">{{ cert.commonName || cert.subject }} — {{ cert.serialNumber }}</span>
+          </ng-template>
+        </p-select>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <p-button
+          label="Tải lại"
+          icon="pi pi-refresh"
+          severity="secondary"
+          [outlined]="true"
+          [loading]="tableLoading()"
+          (onClick)="loadCertificates()"
+        />
+      </div>
+    </div>
+
+    <!-- CẢNH BÁO: cert đang chọn không dùng để ký được -->
+    @if (hasInvalidSelection()) {
+      <p-message severity="error" class="mt-4 block w-full">
+        <div class="flex flex-col gap-1">
+          <span class="font-semibold">Chứng thư số này không dùng để ký được</span>
+          <span class="text-sm">{{ selectedCert()?.reason }}</span>
+          <span class="text-sm">Vui lòng chọn chứng thư số có trạng thái “Ký được” trong bảng bên dưới.</span>
+        </div>
+      </p-message>
+    }
+
+    <!-- Thông tin chi tiết cert hợp lệ đang chọn -->
+    @if (selectedCert(); as cert) {
+      @if (cert.canSign) {
+        <div class="mt-4 grid grid-cols-1 gap-x-8 gap-y-2 rounded-md bg-slate-50 p-4 text-sm md:grid-cols-2">
+          <div class="flex gap-2">
+            <span class="w-32 shrink-0 text-slate-500">Chủ sở hữu</span>
+            <span class="font-medium">{{ cert.commonName }}</span>
+          </div>
+          <div class="flex gap-2">
+            <span class="w-32 shrink-0 text-slate-500">Tổ chức cấp</span>
+            <span class="font-medium">{{ cert.issuerCommonName }}</span>
+          </div>
+          <div class="flex gap-2">
+            <span class="w-32 shrink-0 text-slate-500">Số serial</span>
+            <span class="font-medium">{{ cert.serialNumber }}</span>
+          </div>
+          <div class="flex gap-2">
+            <span class="w-32 shrink-0 text-slate-500">Nguồn</span>
+            <span class="font-medium">{{ cert.sourceLabel }}</span>
+          </div>
+          <div class="flex gap-2">
+            <span class="w-32 shrink-0 text-slate-500">Hiệu lực</span>
+            <span class="font-medium">{{ cert.validFrom }} — {{ cert.validTo }}</span>
+          </div>
+          <div class="flex gap-2">
+            <span class="w-32 shrink-0 text-slate-500">Nơi lưu khóa</span>
+            <span class="font-medium">{{ cert.keyProvider || 'Không xác định' }}</span>
+          </div>
+        </div>
+      }
+    }
+  </div>
+
+  <!-- Tổng quan -->
+  <div class="flex flex-wrap items-center gap-3 text-sm">
+    <span class="rounded-md border border-slate-200 px-3 py-1.5">
+      Tổng số: <span class="font-semibold">{{ rows().length }}</span>
+    </span>
+    <span class="rounded-md border border-green-200 bg-green-50 px-3 py-1.5 text-green-700">
+      Ký được: <span class="font-semibold">{{ signableCount() }}</span>
+    </span>
+    <span class="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-indigo-700">
+      Trên USB token: <span class="font-semibold">{{ tokenCount() }}</span>
+    </span>
+  </div>
+
+  <!-- Danh sách chứng thư số -->
+  <app-data-table
+    tableKey="ky-so-cert"
+    [columns]="columns"
+    [data]="rows()"
+    [loading]="tableLoading()"
+    [hidePaginator]="true"
+    [pageSize]="rows().length"
+  />
+
+  <!-- Chọn cert xong sẽ tự kiểm token (bật hộp PIN) rồi tự sang bước ký -->
+  <p class="flex items-center gap-2 text-sm text-slate-500">
+    @if (verifying()) {
+      <i class="pi pi-spin pi-spinner"></i>
+      <span>Đang kiểm tra chứng thư số, vui lòng nhập PIN nếu được yêu cầu…</span>
+    } @else {
+      <i class="pi pi-info-circle"></i>
+      <span>Chọn một chứng thư số “Ký được” để kiểm tra và chuyển sang bước ký.</span>
+    }
+  </p>
+</div>

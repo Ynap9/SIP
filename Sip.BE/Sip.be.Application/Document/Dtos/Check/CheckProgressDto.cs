@@ -1,4 +1,5 @@
 using Sip.be.Shared.Request;
+using Sip.be.External.Documents.Dtos;
 
 namespace Sip.be.Application.Document.Dtos.Check
 {

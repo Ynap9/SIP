@@ -4,15 +4,20 @@
 > timestamp, so the output passes the existing `NoTimestamp` gate. Replaces the rejected third-party ToolSign.
 > Context: [../toolsign-integration.md](../toolsign-integration.md) §7 (why ToolSign cannot work),
 > [../verify-signature-timestamp.md](../verify-signature-timestamp.md) (the verifier this must satisfy).
+> **Status: IMPLEMENTED — this file is the original intent, not the shipped design.** The build diverged (e.g.
+> `CertificateProvider`/`StoreSigningKey` instead of `TokenCertProvider`, routes `sign/chung-thu-so` and
+> `sign/ky-thu-muc`, a PDF/A gate, output `_daky_` beside the original). The authority on what exists is
+> `.claude/be/plans/{pdf-signing-be.plan.md, pdf-signing-be.decisions.md, pdf-incremental-signing.plan.md}`.
 
 ## Requirements / Input
 - **Input**: a hồ sơ folder (or `attachment/`), a cert `serial` chosen by the user, an output mode, `reason`/`location`.
 - **Preconditions**: USB token plugged in; token middleware (`bit4id xPKI` / VGCA PKI Manager) installed so the token
   cert appears in `X509Store(My, CurrentUser)` with `HasPrivateKey`. Production signs with a **G1** token.
-- **Reuse as-is**: `ISignatureVerifier` (verdict + `+7h` VGCA correction), `SignatureConstants` (OIDs, tolerance).
+- **Reuse as-is**: `ISignatureVerifier` (verdict), `SignatureConstants` (OIDs, tolerance).
 - **Verified facts**: `tsa.ca.gov.vn` is reachable (GET 403 / TSP POST 400 — it answers TSP only). Real files are PAdES
-  `ETSI.CAdES.detached`. TSA `genTime` is stored **7h behind true UTC** — the verifier already corrects this, so
-  signing with a true-UTC `signingTime` round-trips to `ValidTrusted` (residual = TSA delay, 2–131 s < 300 s tolerance).
+  `ETSI.CAdES.detached`. TSA `genTime` is **true UTC** (the 7h skew seen on legacy files is the *signer* writing local
+  time into `signingTime`), so signing with a true-UTC `signingTime` round-trips to `ValidTrusted` — measured residual
+  233 s < 300 s tolerance. See [../bug/genTime-offset-compensates-on-the-wrong-side.md](../bug/genTime-offset-compensates-on-the-wrong-side.md).
 
 ## Steps
 1. **Constants + DTOs.** `Sip.be.Shared/Constants/Documents/SigningConstants.cs`: TSA URL `http://tsa.ca.gov.vn/`,
@@ -34,7 +39,10 @@
    step-3 token as unsigned attr `1.2.840.113549.1.9.16.2.14`. `dotnet build`.
    - *Decision:* `signingCertificateV2` is built by hand because .NET does not add it; without it the file is not
      CAdES-conformant and Adobe/Foxit may reject it even though SIPPACK's verifier (which does not check it) passes.
-5. **PDF incremental-update writer — invisible signature.** `Sip.be.External/Documents/PdfIncrementalSigner.cs`:
+5. **PDF incremental-update writer — invisible signature.** *(SUPERSEDED 2026-07-21 by
+   [../../.claude/be/plans/pdf-incremental-signing.plan.md](../../.claude/be/plans/pdf-incremental-signing.plan.md)
+   — PDFsharp cannot append, so the writer was hand-rolled after all; PDFsharp only draws the appearance.)*
+   `Sip.be.External/Documents/PdfIncrementalSigner.cs`:
    append an incremental update (sig dict `/Filter /Adobe.PPKLite /SubFilter /ETSI.CAdES.detached /M`, `/Contents`
    zero-filled placeholder, `/ByteRange` written with padded slots, new `/AcroForm` + `/Annots` refs, new xref +
    trailer `/Prev`) → compute the real ByteRange → sign the two ranges (step 4) → patch `/Contents` + `/ByteRange`
@@ -65,11 +73,18 @@
 - **Build, don't integrate.** ToolSign can never emit a timestamp (`SignDetached(…, tsaClient: null)` inside
   `Asene.Core.Sign.dll`) and fakes `-1` by forcing PDF/A-1A. Building also removes the vendor licence obligation and
   the .NET 5 (EOL) sidecar. See [../toolsign-integration.md](../toolsign-integration.md) §7.
-- **Hand-rolled incremental update**, no iText7 (AGPL/viral or paid) and no PDFsharp (weak signing support) — matches
-  the zero-dep style of `Sip.be.External` (only `System.Security.Cryptography.Pkcs`).
+- ~~**Hand-rolled incremental update**, no iText7 (AGPL/viral or paid) and no PDFsharp (weak signing support)~~ —
+  **SUPERSEDED 2026-07-20.** The iText7 rejection stands (licence), but PDFsharp gained digital signatures in
+  **6.2.0** (2024-08-12, MIT) *after* this decision, including `IDigitalSigner` for custom signers. Step 5 is the
+  highest-risk file in this plan and PDFsharp does that plumbing for free. Re-evaluate step 5 against
+  [../pdf-signing-libraries.md](../pdf-signing-libraries.md) before implementing it.
+  **Re-evaluated 2026-07-21 → the original decision stands**: PDFsharp always rewrites the whole document, which
+  destroys any existing signature ([../bug/pdfsharp-rewrites-document-destroying-existing-signature.md](../bug/pdfsharp-rewrites-document-destroying-existing-signature.md)),
+  so the incremental writer is hand-rolled and PDFsharp is kept only for drawing the appearance.
 - **Invisible first (steps 1–7), appearance last (step 8).** Appearance is the highest-risk part of a hand-rolled
   writer; staging it last guarantees a working signer even if step 8 overruns. Step 8 is still in v1 scope.
-- **Signer-chain trust is out of scope.** `SignatureVerifier` validates the **TSA** chain to Root G2 only, never the
-  signer's chain — so a G1 production token passes unchanged. Gating on the signer's chain is a separate decision.
+- ~~**Signer-chain trust is out of scope.**~~ — **SUPERSEDED 2026-07-21.** `SignatureVerifier.IsTrustedSigner` now
+  gates the signer's chain too (G1 tried first, then G2), so a G1 production token still passes — but an untrusted
+  signer is rejected. See [signer-trust-gate.plan.md](signer-trust-gate.plan.md).
 - *Known duplication (not touched):* `ByteRangeRegex` + `ExtractContents` already exist in both `PdfSignatureReader`
   and `SignatureVerifier`; this feature writes rather than scans, so no third copy is introduced.

@@ -21,6 +21,10 @@ export const routes: Routes = [
         path: 'boc-tach',
         loadChildren: () => import('./app/pages/boc-tach/boc-tach.router').then((m) => m.bocTachRoutes)
       },
+      {
+        path: 'ky-so',
+        loadChildren: () => import('./app/pages/ky-so/ky-so.router').then((m) => m.kySoRoutes)
+      },
     ]
   }
 ];

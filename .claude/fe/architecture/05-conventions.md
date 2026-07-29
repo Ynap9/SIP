@@ -21,6 +21,7 @@ Angular 21 flat style: `config.ts`, `config.html`, `config.scss`, `config.router
 - Type responses as `IBaseResponse(WithData)` matching the BE `ApiResponse` envelope.
 - Gate on `BaseComponent.isResponseSucceed(res)` (checks `status === 1`) before using `res.data`; it auto-toasts errors.
 - Keep `models/*.models.ts` interfaces in sync with BE DTOs — JSON is **camelCase**.
+- **`models/*.models.ts` holds interfaces ONLY.** Enums, label maps and literal constants go in `shared/constants/<feature>.constants.ts` — all constants live under `shared/constants/`, feature ones included. See [`../docs/project-structure.md`](../docs/project-structure.md) §11.
 
 ## Pages
 - Extend `BaseComponent`; override `ngOnInit()` to load, `onRouteActivated()` to reload on back-nav.

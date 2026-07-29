@@ -52,5 +52,12 @@ Sip.be.Api/dcscag2.crt
 Sip.be.Api/cpg2.crt
 Sip.be.Api/cpg2.cer
 ## G1 (dùng cho chain của NGƯỜI KÝ - token production là G1):
+Sip.be.Api/rootca.crt
 Sip.be.Api/cp.crt
 Sip.be.Api/cp.cer
+
+## ===== Bộ cài phụ thuộc nhúng vào installer (binary hãng thứ ba - KHÔNG commit) =====
+## Inno Setup nhúng các file này vào SIPPACK-Setup.exe để tự cài trình điều khiển
+## USB token trên máy đích. build-desktop.ps1 in ra đúng tên file còn thiếu và nơi cần đặt.
+installer/prerequisites/*.exe
+installer/prerequisites/*.msi

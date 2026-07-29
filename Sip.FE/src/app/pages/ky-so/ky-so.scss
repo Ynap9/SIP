@@ -1,0 +1,5 @@
+// Chỉ báo 2 bước: giới hạn bề ngang cho cân đối, canh giữa dưới breadcrumb.
+:host ::ng-deep .ky-so-steps {
+  max-width: 40rem;
+  margin: 0.5rem auto 0;
+}

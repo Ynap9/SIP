@@ -14,9 +14,24 @@ Read before creating/editing any `.md`. Goal: every doc reads as one system — 
 - Note: code comments stay Vietnamese (per `07-conventions.md`) — that is different from docs.
 
 ## Size — keep files small
-- **Every `.md` must stay under 100 lines.** If it grows past that, **SPLIT into multiple files**
-  (e.g. a `README.md` index + numbered sub-files, like `.claude/be/architecture/`).
+- **Every `.md` must stay under 100 lines.** What to do when it grows past that depends on **how far over**:
+
+| Over by | Action |
+|---|---|
+| **≤ 10 lines** | **DO NOT split.** Compress instead — tighten wording, merge related bullets/table rows. A file split off for a few lines only fragments one topic. |
+| **> 10 lines** | **SPLIT into multiple files** (e.g. a `README.md` index + numbered sub-files, like `.claude/be/architecture/`). |
+
 - One topic per file; link related files with relative paths.
+
+### When you split, the parts MUST stay connected
+A reader (human or agent) landing on one part has to know the rest exists and in what order to read it. Every split
+set therefore needs **both**:
+1. **An index** — a `README.md` (or the first file) listing the parts in reading order with a one-line purpose each.
+2. **A continuation pointer at the end of each part** — e.g.
+   `> **Next:** [02-steps.md](02-steps.md) — the ordered build steps for this plan.`
+   and a back-link at the top: `> **Part 2 of 3** · previous: [01-requirements.md](01-requirements.md)`.
+
+Never leave a part that reads as if it were the whole document — that is how an agent implements half a plan.
 
 ## Structure
 - Exactly one `#` H1 title; a one-line purpose right under it (a `>` blockquote for canonical docs).
@@ -42,7 +57,7 @@ Read before creating/editing any `.md`. Goal: every doc reads as one system — 
 - New memory file: add exactly one pointer line in `MEMORY.md`; keep the fact in its own file.
 
 ## Before saving — checklist
-1. English (or matching the file when editing)? **Under 100 lines** (else split)?
+1. English (or matching the file when editing)? **Under 100 lines** — if over by ≤10 compress, if over by >10 split into linked parts (index + next/previous pointers)?
 2. One H1, clear H2s, code blocks have a language, relative links valid?
 3. Plan: has Requirements/Input, Steps (build step last), Expected output?
 4. Any other doc/pattern affected that must be updated too?
