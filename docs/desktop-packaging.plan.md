@@ -57,9 +57,22 @@
    pinned CA `.crt` files and the 3 dependency installers → `makensis SIPPACK.nsi` → `SIPPACK-v<ver>-win-x64.zip`.
    Output: `installer-output/SIPPACK-Setup.exe` (~137 MB) and a ~57 MB install dir.
 
-   Dependency installers live in `Sip.BE/installer/prerequisites/` (binaries gitignored), are embedded in the
-   setup, extracted to `$PLUGINSDIR` and run silently: `/S` (bit4id, itself NSIS), `msiexec /qn /norestart /l*v`
-   (GCA01-Client), `/silent /install` (WebView2). `$PLUGINSDIR` is auto-deleted, so the install dir does not grow.
+   **Install-dir layout** — the app folder has two dedicated subfolders, and both ship in the `.zip` as well as
+   in the setup: `certs/` (the 5 pinned CA files; `Sip.be.Api.csproj` puts them there via `Link`, and
+   `SignatureVerifier.LoadPinnedCert` looks in `certs/` then falls back to the app root so older installs keep
+   working) and `drivers/` (the three dependency installers, staged from `Sip.BE/installer/drivers/`, binaries
+   gitignored). Because `drivers/` is inside `publish/`, the setup ships it through the ordinary `File /r` and
+   runs the installers from `$INSTDIR\drivers\` — no second embedded copy.
+
+   Silent switches: `/S` (bit4id, itself NSIS), `msiexec /qn /norestart /l*v` (GCA01-Client),
+   `/silent /install` (WebView2).
+
+   **The app also self-heals** (`Sip.Desktop/Program.cs`), which is what makes the `.zip` usable on a bare
+   machine: `EnsureWebView2Runtime()` runs *synchronously before* the Photino window is created — without the
+   runtime the window throws and the app dies silently — and `EnsureTokenDrivers()` runs on a background task so
+   Check/Pack/Unpack stay usable while the token middleware installs. Driver installs need elevation, so they go
+   through `Verb = "runas"`; if the user dismisses the UAC prompt a marker file in `%AppData%\SipPack` stops the
+   app from asking again on every launch.
 
    **Detection uses exact identifiers, never display-name matching** — the GCA01 ProductCode
    `{648B71AE-68FC-45D4-B1A3-21BC86229A73}` read from the MSI Property table, the `SOFTWARE\bit4id` registry

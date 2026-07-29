@@ -31,21 +31,21 @@
   <ItemGroup>
     <!-- Chứng thư số Ban Cơ yếu G2 (gitignore, cấp out-of-band) - copy ra output để SignatureVerifier nạp & đối chiếu pin.
          rootcag2 = Root (trust anchor); dcscag2/cpg2 = CA trung gian (Đảng/Nhà nước G2) đưa vào ExtraStore khi dựng chain. -->
-    <Content Include="rootcag2.crt" Condition="Exists('rootcag2.crt')">
+    <Content Include="rootcag2.crt" Condition="Exists('rootcag2.crt')" Link="certs\rootcag2.crt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="dcscag2.crt" Condition="Exists('dcscag2.crt')">
+    <Content Include="dcscag2.crt" Condition="Exists('dcscag2.crt')" Link="certs\dcscag2.crt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="cpg2.crt" Condition="Exists('cpg2.crt')">
+    <Content Include="cpg2.crt" Condition="Exists('cpg2.crt')" Link="certs\cpg2.crt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <!-- Nhánh G1 (thế hệ 2010-2030) dùng cho chain của NGƯỜI KÝ: rootca = Root G1 (trust anchor, self-signed);
          cp.crt = Sub-CA G1 cấp cert người ký, vào ExtraStore vì CMS trong PDF chỉ nhúng leaf. -->
-    <Content Include="rootca.crt" Condition="Exists('rootca.crt')">
+    <Content Include="rootca.crt" Condition="Exists('rootca.crt')" Link="certs\rootca.crt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="cp.crt" Condition="Exists('cp.crt')">
+    <Content Include="cp.crt" Condition="Exists('cp.crt')" Link="certs\cp.crt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

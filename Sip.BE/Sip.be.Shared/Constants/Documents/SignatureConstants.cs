@@ -6,6 +6,11 @@ namespace Sip.be.Shared.Constants.Documents
     /// </summary>
     public static class SignatureConstants
     {
+        // Thư mục con cạnh app chứa toàn bộ chứng thư CA đã ghim. Gom vào một chỗ để tách bạch với
+        // thư mục "drivers" (bộ cài trình điều khiển token) và tránh rải file lạ ra gốc thư mục cài.
+        // Loader vẫn dò tiếp ở gốc thư mục app để không làm hỏng các bản cài cũ đã có cert nằm phẳng.
+        public const string CertificateFolderName = "certs";
+
         // Trust anchor: RootCA chuyên dùng Chính phủ G2 — SHA-256 (fingerprint DER) là NGUỒN CHÂN LÝ.
         // File cert (rootcag2.crt) chỉ là "material", đối chiếu theo pin này khi nạp (tráo file -> fail).
         public const string RootG2Sha256 = "F04BA4B459A7C9A1B971AD9B1CB833E695A80C79AEA63B174B66A70EDFE2FDB8";

@@ -24,7 +24,11 @@ Unicode true
 !define APP_EXE       "SIPPACK.exe"
 
 !define PUBLISH_DIR "..\..\publish"
-!define PREQ_DIR    "prerequisites"
+
+; Bộ cài trình điều khiển nằm SẴN trong publish\drivers (do build-desktop.ps1 đưa vào) nên đi theo
+; luôn qua "File /r" bên dưới - không nhúng riêng lần nữa. Nhờ vậy bản .zip cũng có driver, và
+; chính app tự cài ngầm được khi khởi động (Sip.Desktop/Program.cs).
+!define DRIVERS_DIR "drivers"
 
 !define WEBVIEW2_EXE "MicrosoftEdgeWebView2Setup.exe"
 !define BIT4ID_EXE   "bit4id_xpki_1.4.10.764-ng-user-vgca-pkimgr-bwc.exe"
@@ -172,19 +176,17 @@ Section "-Phụ thuộc cho USB token và ký số"
   ${If} $Detected == "1"
     DetailPrint "  đã có sẵn - bỏ qua."
   ${Else}
-!if /FileExists "${PREQ_DIR}\${WEBVIEW2_EXE}"
-    DetailPrint "  chưa có - đang cài..."
-    File "/oname=$PLUGINSDIR\${WEBVIEW2_EXE}" "${PREQ_DIR}\${WEBVIEW2_EXE}"
-    ExecWait '"$PLUGINSDIR\${WEBVIEW2_EXE}" /silent /install' $0
-    DetailPrint "  bộ cài trả về mã $0"
-    Call DetectWebView2
-    ${If} $Detected != "1"
-      StrCpy $DepFailed "$DepFailed$\n   - Microsoft Edge WebView2 Runtime (mã $0)"
+    ${If} ${FileExists} "$INSTDIR\${DRIVERS_DIR}\${WEBVIEW2_EXE}"
+      DetailPrint "  chưa có - đang cài..."
+      ExecWait '"$INSTDIR\${DRIVERS_DIR}\${WEBVIEW2_EXE}" /silent /install' $0
+      DetailPrint "  bộ cài trả về mã $0"
+      Call DetectWebView2
+      ${If} $Detected != "1"
+        StrCpy $DepFailed "$DepFailed$\n   - Microsoft Edge WebView2 Runtime (mã $0)"
+      ${EndIf}
+    ${Else}
+      DetailPrint "  không có bộ cài kèm theo - bỏ qua."
     ${EndIf}
-!else
-    !warning "Thiếu ${PREQ_DIR}\${WEBVIEW2_EXE} - bộ cài sẽ KHÔNG tự cài WebView2."
-    DetailPrint "  bộ cài không kèm WebView2 - bỏ qua."
-!endif
   ${EndIf}
 
   ; --- 2) Bit4id Universal MW ------------------------------------------------
@@ -193,22 +195,20 @@ Section "-Phụ thuộc cho USB token và ký số"
   ${If} $Detected == "1"
     DetailPrint "  đã có sẵn - bỏ qua."
   ${Else}
-!if /FileExists "${PREQ_DIR}\${BIT4ID_EXE}"
-    DetailPrint "  chưa có - đang cài (có thể mất vài phút)..."
-    File "/oname=$PLUGINSDIR\${BIT4ID_EXE}" "${PREQ_DIR}\${BIT4ID_EXE}"
-    ; Bộ cài gốc của bit4id cũng là NSIS -> /S là cờ cài im lặng chuẩn
-    ExecWait '"$PLUGINSDIR\${BIT4ID_EXE}" /S' $0
-    DetailPrint "  bộ cài trả về mã $0"
-    Call DetectBit4id
-    ${If} $Detected == "1"
-      StrCpy $DriverInstalled "1"
+    ${If} ${FileExists} "$INSTDIR\${DRIVERS_DIR}\${BIT4ID_EXE}"
+      DetailPrint "  chưa có - đang cài (có thể mất vài phút)..."
+      ; Bộ cài gốc của bit4id cũng là NSIS -> /S là cờ cài im lặng chuẩn
+      ExecWait '"$INSTDIR\${DRIVERS_DIR}\${BIT4ID_EXE}" /S' $0
+      DetailPrint "  bộ cài trả về mã $0"
+      Call DetectBit4id
+      ${If} $Detected == "1"
+        StrCpy $DriverInstalled "1"
+      ${Else}
+        StrCpy $DepFailed "$DepFailed$\n   - Bit4id Universal MW (mã $0)"
+      ${EndIf}
     ${Else}
-      StrCpy $DepFailed "$DepFailed$\n   - Bit4id Universal MW (mã $0)"
+      DetailPrint "  không có bộ cài kèm theo - bỏ qua."
     ${EndIf}
-!else
-    !warning "Thiếu ${PREQ_DIR}\${BIT4ID_EXE} - bộ cài sẽ KHÔNG tự cài middleware USB token."
-    DetailPrint "  bộ cài không kèm Bit4id - bỏ qua."
-!endif
   ${EndIf}
 
   ; --- 3) VGCA GCA01-Client v2 ----------------------------------------------
@@ -217,21 +217,19 @@ Section "-Phụ thuộc cho USB token và ký số"
   ${If} $Detected == "1"
     DetailPrint "  đã có sẵn - bỏ qua."
   ${Else}
-!if /FileExists "${PREQ_DIR}\${VGCA_MSI}"
-    DetailPrint "  chưa có - đang cài..."
-    File "/oname=$PLUGINSDIR\${VGCA_MSI}" "${PREQ_DIR}\${VGCA_MSI}"
-    ExecWait 'msiexec /i "$PLUGINSDIR\${VGCA_MSI}" /qn /norestart /l*v "$INSTDIR\install-logs\gca01-client.log"' $0
-    DetailPrint "  msiexec trả về mã $0"
-    Call DetectVgca
-    ${If} $Detected == "1"
-      StrCpy $DriverInstalled "1"
+    ${If} ${FileExists} "$INSTDIR\${DRIVERS_DIR}\${VGCA_MSI}"
+      DetailPrint "  chưa có - đang cài..."
+      ExecWait 'msiexec /i "$INSTDIR\${DRIVERS_DIR}\${VGCA_MSI}" /qn /norestart /l*v "$INSTDIR\install-logs\gca01-client.log"' $0
+      DetailPrint "  msiexec trả về mã $0"
+      Call DetectVgca
+      ${If} $Detected == "1"
+        StrCpy $DriverInstalled "1"
+      ${Else}
+        StrCpy $DepFailed "$DepFailed$\n   - VGCA GCA01-Client v2 (mã $0, log: install-logs\gca01-client.log)"
+      ${EndIf}
     ${Else}
-      StrCpy $DepFailed "$DepFailed$\n   - VGCA GCA01-Client v2 (mã $0, log: install-logs\gca01-client.log)"
+      DetailPrint "  không có bộ cài kèm theo - bỏ qua."
     ${EndIf}
-!else
-    !warning "Thiếu ${PREQ_DIR}\${VGCA_MSI} - bộ cài sẽ KHÔNG tự cài GCA01-Client."
-    DetailPrint "  bộ cài không kèm GCA01-Client - bỏ qua."
-!endif
   ${EndIf}
 
   ; --- Báo cáo kết quả -------------------------------------------------------

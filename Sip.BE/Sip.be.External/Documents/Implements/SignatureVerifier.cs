@@ -557,7 +557,10 @@ namespace Sip.be.External.Documents.Implements
         {
             try
             {
-                var path = Path.Combine(AppContext.BaseDirectory, fileName);
+                // Ưu tiên thư mục certs/; nếu không có thì dò ở gốc thư mục app để bản cài cũ
+                // (cert nằm phẳng cạnh exe) vẫn chạy được sau khi nâng cấp.
+                var path = Path.Combine(AppContext.BaseDirectory, SignatureConstants.CertificateFolderName, fileName);
+                if (!File.Exists(path)) path = Path.Combine(AppContext.BaseDirectory, fileName);
                 if (!File.Exists(path)) return null;
                 var text = File.ReadAllText(path);
                 // CreateFromPem = PEM CHỈ chứa cert (CreateFromPemFile là cho cert+private key -> ném lỗi với PEM cert-only).

@@ -50,9 +50,9 @@ if (Test-Path $seedSrc) {
 # 5) Kiểm tra chứng thư CA đã ra output chưa.
 #    Tên file là load-bearing: SignatureVerifier nạp theo đúng tên trong SignatureConstants,
 #    thiếu file nào là nhánh chain đó null âm thầm -> MỌI file PDF bị chấm untrusted.
-Write-Host '==> Kiểm tra chứng thư CA (pinned)...' -ForegroundColor Cyan
+Write-Host '==> Kiểm tra chứng thư CA (publish/certs)...' -ForegroundColor Cyan
 $crtRequired = @('rootcag2.crt', 'dcscag2.crt', 'cpg2.crt', 'rootca.crt', 'cp.crt')
-$crtMissing  = $crtRequired | Where-Object { -not (Test-Path (Join-Path $publish $_)) }
+$crtMissing  = $crtRequired | Where-Object { -not (Test-Path (Join-Path $publish "certs/$_")) }
 if ($crtMissing) {
     Write-Host "   THIẾU chứng thư: $($crtMissing -join ', ')" -ForegroundColor Red
     Write-Host '   -> Đặt file vào Sip.be.Api/ rồi build lại, nếu không app sẽ coi mọi chữ ký là untrusted.' -ForegroundColor Red
@@ -60,30 +60,33 @@ if ($crtMissing) {
     Write-Host "   Đủ $($crtRequired.Count)/$($crtRequired.Count) chứng thư (G1 + G2)." -ForegroundColor DarkGray
 }
 
-# 6) Kiểm tra bộ cài phụ thuộc cho USB token / ký số.
-#    KHÔNG copy vào publish: Inno Setup nhúng thẳng vào SIPPACK-Setup.exe rồi giải ra {tmp}
-#    và tự chạy im lặng lúc cài, nên thư mục cài của app không bị phình thêm ~92MB.
-Write-Host '==> Kiểm tra bộ cài phụ thuộc (USB token / ký số)...' -ForegroundColor Cyan
-$preqDir = Join-Path $root 'installer/prerequisites'
-$preq = [ordered]@{
+# 6) Đưa bộ cài trình điều khiển token vào publish/drivers.
+#    Nằm TRONG thư mục app (không chỉ trong installer) vì hai lý do: bản .zip cũng phải cài được
+#    driver, và chính app tự cài ngầm khi khởi động nếu máy còn thiếu (Sip.Desktop/Program.cs).
+Write-Host '==> Đóng gói trình điều khiển token (publish/drivers)...' -ForegroundColor Cyan
+$driverSrc = Join-Path $root 'installer/drivers'
+$driverOut = Join-Path $publish 'drivers'
+New-Item -ItemType Directory -Force -Path $driverOut | Out-Null
+$drivers = [ordered]@{
     'bit4id_xpki_1.4.10.764-ng-user-vgca-pkimgr-bwc.exe' = 'Bit4id Universal MW - middleware bắc cầu token vào Windows Cert Store'
     'gca01-client-v2-x64-8.3.msi'                        = 'VGCA GCA01-Client v2 - trình điều khiển token Ban Cơ yếu'
     'MicrosoftEdgeWebView2Setup.exe'                     = 'WebView2 Runtime - nhân hiển thị giao diện'
 }
-$preqMissing = @()
-foreach ($f in $preq.Keys) {
-    $p = Join-Path $preqDir $f
+$driverMissing = @()
+foreach ($f in $drivers.Keys) {
+    $p = Join-Path $driverSrc $f
     if (Test-Path $p) {
+        Copy-Item $p (Join-Path $driverOut $f) -Force
         $mb = [math]::Round((Get-Item $p).Length / 1MB, 1)
-        Write-Host ("   [OK]     {0,-6} MB  {1}" -f $mb, $preq[$f]) -ForegroundColor DarkGray
+        Write-Host ("   [OK]     {0,-6} MB  {1}" -f $mb, $drivers[$f]) -ForegroundColor DarkGray
     } else {
-        $preqMissing += $f
-        Write-Host ("   [THIẾU]          {0}" -f $preq[$f]) -ForegroundColor Yellow
+        $driverMissing += $f
+        Write-Host ("   [THIẾU]          {0}" -f $drivers[$f]) -ForegroundColor Yellow
     }
 }
-if ($preqMissing) {
-    Write-Host '   -> Installer vẫn compile được nhưng sẽ KHÔNG tự cài phần thiếu.' -ForegroundColor Yellow
-    Write-Host "   -> Đặt file vào: $preqDir" -ForegroundColor Yellow
+if ($driverMissing) {
+    Write-Host '   -> App và installer vẫn chạy nhưng sẽ KHÔNG tự cài được phần thiếu.' -ForegroundColor Yellow
+    Write-Host "   -> Đặt file vào: $driverSrc" -ForegroundColor Yellow
 }
 
 # 7) Biên dịch installer bằng NSIS. Chọn NSIS vì giấy phép zlib/libpng cho phép dùng

@@ -56,8 +56,8 @@ Sip.be.Api/rootca.crt
 Sip.be.Api/cp.crt
 Sip.be.Api/cp.cer
 
-## ===== Bộ cài phụ thuộc nhúng vào installer (binary hãng thứ ba - KHÔNG commit) =====
-## Inno Setup nhúng các file này vào SIPPACK-Setup.exe để tự cài trình điều khiển
-## USB token trên máy đích. build-desktop.ps1 in ra đúng tên file còn thiếu và nơi cần đặt.
-installer/prerequisites/*.exe
-installer/prerequisites/*.msi
+## ===== Bộ cài trình điều khiển USB token (binary hãng thứ ba - KHÔNG commit) =====
+## build-desktop.ps1 copy các file này vào publish/drivers để đi theo cả bản .zip lẫn
+## SIPPACK-Setup.exe, và in ra đúng tên file còn thiếu kèm nơi cần đặt.
+installer/drivers/*.exe
+installer/drivers/*.msi
