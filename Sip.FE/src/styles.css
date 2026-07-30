@@ -12,14 +12,15 @@ body {
 }
 
 body {
-  font-size: 15px;
+  font-size: 14px;
   background-color: #eef2f7; /* nền xám của layout */
 }
 
-/* Buộc mọi component PrimeNG dùng đúng font + cỡ chữ của app */
+/* Buộc mọi component PrimeNG dùng đúng font + cỡ chữ của app. Cỡ chữ phải khớp con số ở body: PrimeNG tự đặt
+   font-size riêng cho từng component nên để lệch là bảng/nút chữ to nhỏ không đều nhau trong cùng một trang. */
 .p-component {
   font-family: 'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif !important;
-  font-size: 15px !important;
+  font-size: 14px !important;
 }
 
 /* Cho phép cell data-table xuống dòng theo \n (ghi đè white-space:nowrap của PrimeNG resizable) */
@@ -94,7 +95,7 @@ body {
   top: calc(var(--layout-topbar-height) + var(--layout-gap));
   left: var(--layout-gap);
   width: var(--layout-sidebar-width);
-  height: calc(100vh - var(--layout-topbar-height) - var(--layout-gap) * 2);
+  height: calc(var(--app-vh, 100vh) - var(--layout-topbar-height) - var(--layout-gap) * 2);
   z-index: 40;
   overflow-y: auto;
   background: #ffffff;
@@ -108,16 +109,20 @@ body {
 .layout-main-container {
   display: flex;
   flex-direction: column;
-  min-height: calc(100vh - var(--layout-topbar-height));
+  min-height: calc(var(--app-vh, 100vh) - var(--layout-topbar-height));
   margin-top: var(--layout-topbar-height);
   margin-left: calc(var(--layout-sidebar-width) + var(--layout-gap));
   padding: var(--layout-gap);
   transition: margin-left 0.3s cubic-bezier(0.05, 0.74, 0.2, 0.99);
 }
 
-/* Thẻ content trắng bo góc */
+/* Thẻ content trắng bo góc.
+   min-width:0 là chốt chặn tràn ngang: phần tử con của flex/grid mặc định min-width:auto, nghĩa là nội dung
+   rộng bao nhiêu thì đẩy khung rộng bấy nhiêu - thu nhỏ cửa sổ là cả trang bị đẩy lệch và sinh thanh cuộn
+   ngang. Đặt 0 để khung bám đúng chỗ còn lại, phần rộng quá tự cuộn trong khung của nó. */
 .layout-main {
   flex: 1 1 auto;
+  min-width: 0;
   background: #ffffff;
   border: 1px solid var(--layout-border);
   border-radius: var(--layout-radius);

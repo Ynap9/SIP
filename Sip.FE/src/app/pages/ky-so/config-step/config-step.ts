@@ -9,6 +9,7 @@ import {
   model,
   output,
   signal,
+  viewChild,
   viewChildren
 } from '@angular/core';
 import * as pdfjs from 'pdfjs-dist';
@@ -31,18 +32,29 @@ import {
 import { ConfigConfirmDialog } from './config-confirm-dialog/config-confirm-dialog';
 
 // pdf.js chạy phần giải mã PDF trong worker riêng; không trỏ workerSrc thì thư viện tự chặn với lỗi
-// "No GlobalWorkerOptions.workerSrc specified". new URL(..., import.meta.url) để bộ build tự đóng gói file
-// worker vào bundle - app desktop chạy offline nên KHÔNG được lấy worker từ CDN.
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url
-).toString();
+// "No GlobalWorkerOptions.workerSrc specified". App desktop chạy offline nên KHÔNG được lấy worker từ CDN:
+// file worker được angular.json copy từ node_modules/pdfjs-dist/build ra thẳng gốc thư mục build.
+// KHÔNG dùng new URL('pdfjs-dist/build/...', import.meta.url): esbuild của bộ build production không resolve
+// bare specifier thành asset nên biểu thức đó còn nguyên trong bundle, lúc chạy giải ra một đường dẫn không
+// tồn tại; server lại nuốt 404 bằng fallback index.html nên pdf.js nhận về HTML và chết. Dev server resolve
+// được nên lỗi CHỈ hiện ở bản build. document.baseURI theo <base href> nên đúng cả khi app chạy ở cổng động.
+pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdf.worker.min.mjs', document.baseURI).toString();
 
 // Bề rộng khung xem trước (px). Trang được render vừa đúng bề rộng này, mọi tọa độ kéo thả quy về TỈ LỆ nên
-// con số này không ảnh hưởng kết quả, chỉ ảnh hưởng độ nét khi xem.
-const PREVIEW_WIDTH_PX = 680;
+// con số này không ảnh hưởng kết quả ký, chỉ ảnh hưởng độ nét và chỗ chiếm khi xem.
+// Bề rộng THẬT đo từ khung chứa (xem previewWidth): app desktop thu phóng được nên một con số cứng là trang
+// rộng hơn cả cột chứa nó, đẩy tràn ngang cả bố cục. Trần giữ đúng 680 như trước để lúc cửa sổ rộng thì
+// giao diện không đổi; sàn để trang không teo tới mức không đặt nổi khối chữ ký.
+const PREVIEW_MIN_WIDTH_PX = 260;
+const PREVIEW_MAX_WIDTH_PX = 680;
+// Padding p-4 hai bên của khung cuộn - clientWidth đã trừ thanh cuộn nhưng chưa trừ padding.
+const PREVIEW_HOST_PADDING_PX = 32;
 
-// Hệ số render vượt cỡ: canvas được vẽ ở kích thước gấp ngần này rồi thu về đúng PREVIEW_WIDTH_PX bằng CSS.
+// Chờ người dùng thả chuột rồi mới vẽ lại cho nét: kéo mép cửa sổ phát ra hàng chục sự kiện resize, vẽ lại
+// theo từng sự kiện là treo máy. Trong lúc kéo trang vẫn co giãn bằng CSS nên bố cục không hề nhảy.
+const PREVIEW_RESIZE_SETTLE_MS = 250;
+
+// Hệ số render vượt cỡ: canvas được vẽ ở kích thước gấp ngần này rồi thu về đúng cssWidth/cssHeight bằng CSS.
 // Vẽ đúng 1:1 thì chữ trong PDF bị răng cưa, nhất là dấu tiếng Việt; tối thiểu 2 để màn hình thường (dpr 1)
 // cũng nét, còn màn hình dpr cao thì lấy đúng dpr để không thu nhỏ ngược làm mờ.
 const PREVIEW_RENDER_SCALE = Math.max(window.devicePixelRatio || 1, 2);
@@ -50,11 +62,15 @@ const PREVIEW_RENDER_SCALE = Math.max(window.devicePixelRatio || 1, 2);
 /** Thao tác con trỏ đang thực hiện trên một khối đã đặt: dời chỗ hoặc kéo một trong 4 góc. */
 type DragMode = 'move' | 'nw' | 'ne' | 'sw' | 'se';
 
-/** 1 trang trong khung xem trước. Khổ tính sẵn để khung cuộn có chiều cao đúng trước cả khi trang được vẽ. */
-interface IPreviewPage {
+/** Khổ THẬT của 1 trang, đo bằng point ngay khi mở file - không phụ thuộc cỡ cửa sổ. */
+interface IPageMetric {
   number: number;
   widthPt: number;
   heightPt: number;
+}
+
+/** 1 trang trong khung xem trước. Khổ tính sẵn để khung cuộn có chiều cao đúng trước cả khi trang được vẽ. */
+interface IPreviewPage extends IPageMetric {
   cssWidth: number;
   cssHeight: number;
 }
@@ -88,7 +104,23 @@ export class ConfigStep extends BaseComponent {
   previewLoading = signal<boolean>(false);
 
   // ===== Các trang của file đang xem (xếp dọc, cuộn được) =====
-  pages = signal<IPreviewPage[]>([]);
+  /** Khổ point của từng trang - chỉ đổi khi mở file khác. */
+  private pageMetrics = signal<IPageMetric[]>([]);
+  /** Bề rộng vẽ 1 trang, bám theo bề rộng khung chứa nên cửa sổ hẹp thì trang hẹp theo. */
+  private previewWidth = signal<number>(PREVIEW_MAX_WIDTH_PX);
+
+  /**
+   * Trang kèm khổ hiển thị. Là computed chứ không phải signal đặt một lần: cửa sổ đổi cỡ thì previewWidth đổi
+   * và mọi trang tự tính lại khổ, khung cuộn giữ đúng chiều cao mà không cần mở lại file.
+   */
+  pages = computed<IPreviewPage[]>(() => {
+    const cssWidth = this.previewWidth();
+    return this.pageMetrics().map((metric) => ({
+      ...metric,
+      cssWidth,
+      cssHeight: (cssWidth * metric.heightPt) / metric.widthPt
+    }));
+  });
 
   // ===== Cấu hình =====
   allowOverlapContent = signal<boolean>(false);
@@ -111,6 +143,9 @@ export class ConfigStep extends BaseComponent {
   protected readonly resizeCorners: DragMode[] = ['nw', 'ne', 'sw', 'se'];
 
   private canvasRefs = viewChildren<ElementRef<HTMLCanvasElement>>('pdfCanvas');
+  private previewWrap = viewChild<ElementRef<HTMLDivElement>>('previewWrap');
+  private previewObserver: ResizeObserver | null = null;
+  private previewResizeTimer: ReturnType<typeof setTimeout> | null = null;
   private pdfDoc: PDFDocumentProxy | null = null;
   // Giữ loading task vì destroy() nằm ở task (đóng cả worker), không nằm ở document proxy.
   private pdfTask: PDFDocumentLoadingTask | null = null;
@@ -130,9 +165,39 @@ export class ConfigStep extends BaseComponent {
     super();
     this.destroyRef.onDestroy(() => {
       this.pageObserver?.disconnect();
+      this.previewObserver?.disconnect();
+      if (this.previewResizeTimer) clearTimeout(this.previewResizeTimer);
       void this.pdfTask?.destroy();
     });
   }
+
+  // Bám bề rộng khung cuộn để trang PDF luôn vừa cột chứa nó. Theo dõi bằng ResizeObserver chứ không nghe
+  // sự kiện resize của window: cột này còn co giãn khi thu/mở sidebar hay khi bố cục đổi số cột, những lúc
+  // đó cửa sổ không hề đổi cỡ nên window.resize không phát.
+  private previewSizeEffect = effect(() => {
+    const host = this.previewWrap()?.nativeElement;
+    if (!host) return;
+
+    this.previewObserver?.disconnect();
+    this.previewObserver = new ResizeObserver(() => {
+      const usable = host.clientWidth - PREVIEW_HOST_PADDING_PX;
+      this.previewWidth.set(
+        Math.min(Math.max(usable, PREVIEW_MIN_WIDTH_PX), PREVIEW_MAX_WIDTH_PX)
+      );
+
+      // Trang vừa co giãn bằng CSS nên đã đúng chỗ ngay; chỉ vẽ lại cho nét khi người dùng ngừng kéo.
+      // Xoá dấu "đã vẽ" rồi gắn lại bộ theo dõi cuộn: trang nào đang trong khung nhìn sẽ tự được vẽ lại.
+      if (this.previewResizeTimer) clearTimeout(this.previewResizeTimer);
+      this.previewResizeTimer = setTimeout(() => {
+        this.renderedPages.clear();
+        const observer = this.pageObserver;
+        if (!observer) return;
+        observer.disconnect();
+        this.canvasRefs().forEach((canvas) => observer.observe(canvas.nativeElement));
+      }, PREVIEW_RESIZE_SETTLE_MS);
+    });
+    this.previewObserver.observe(host);
+  });
 
   // Canvas do @for sinh ra sau khi pages() đổi -> gắn bộ theo dõi cuộn ngay khi số canvas khớp số trang.
   private observeEffect = effect(() => {
@@ -285,7 +350,7 @@ export class ConfigStep extends BaseComponent {
           this.previewLoading.set(false);
           if (data.total === 0) {
             this.currentFile.set(null);
-            this.pages.set([]);
+            this.pageMetrics.set([]);
             this.messageWarning('Thư mục không có file PDF nào để xem trước.');
           }
           return;
@@ -315,7 +380,7 @@ export class ConfigStep extends BaseComponent {
       // đóng thì xem qua vài chục file là ngốn hết RAM.
       this.pageObserver?.disconnect();
       this.renderedPages.clear();
-      this.pages.set([]);
+      this.pageMetrics.set([]);
       await this.pdfTask?.destroy();
 
       this.pdfTask = pdfjs.getDocument({ url: this.signService.pdfFileUrl(fullPath) });
@@ -324,20 +389,14 @@ export class ConfigStep extends BaseComponent {
       // Đo TRƯỚC khổ mọi trang rồi mới dựng khung: khung cuộn có ngay chiều cao thật nên thanh cuộn không
       // nhảy giật khi từng trang được vẽ dần. scale 1 = khổ trang thật theo point, KHÔNG phải pixel hiển thị
       // -> đây mới là số để quy đổi tỉ lệ.
-      const pages: IPreviewPage[] = [];
+      const metrics: IPageMetric[] = [];
       for (let number = 1; number <= this.pdfDoc.numPages; number++) {
         const page = await this.pdfDoc.getPage(number);
         const real = page.getViewport({ scale: 1 });
-        pages.push({
-          number,
-          widthPt: real.width,
-          heightPt: real.height,
-          cssWidth: PREVIEW_WIDTH_PX,
-          cssHeight: (PREVIEW_WIDTH_PX * real.height) / real.width
-        });
+        metrics.push({ number, widthPt: real.width, heightPt: real.height });
       }
 
-      this.pages.set(pages);
+      this.pageMetrics.set(metrics);
       this.previewLoading.set(false);
     } catch {
       this.previewLoading.set(false);

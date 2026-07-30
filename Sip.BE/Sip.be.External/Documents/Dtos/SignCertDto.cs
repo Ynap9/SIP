@@ -46,8 +46,16 @@ namespace Sip.be.External.Documents.Dtos
         /// <summary>KeyUsage cho phép ký (digitalSignature/nonRepudiation), hoặc cert không khai KeyUsage.</summary>
         public bool AllowsSigning { get; set; }
 
-        /// <summary>Đủ điều kiện dùng để ký = có private key + còn hạn + KeyUsage cho phép.</summary>
-        public bool CanSign => HasPrivateKey && !IsExpired && AllowsSigning;
+        /// <summary>Chain về Root G1 hoặc Root G2 đã ghim của Ban Cơ yếu (đúng phép thử mà bước ký áp dụng).</summary>
+        public bool IsTrusted { get; set; }
+
+        /// <summary>
+        /// Đủ điều kiện dùng để ký = có private key + còn hạn + KeyUsage cho phép + chain về CA Ban Cơ yếu.
+        /// Vế chain BẮT BUỘC có mặt ở đây: thiếu nó thì cert ngoài Ban Cơ yếu vẫn hiện "ký được", người dùng
+        /// chọn xong mới bị pre-flight của StoreSigningKey chặn — hoặc tệ hơn là ký ra file mà khâu đóng gói
+        /// sau đó đánh UntrustedSigner. Phép thử phải trùng khít bước ký, nếu không danh sách này nói dối.
+        /// </summary>
+        public bool CanSign => HasPrivateKey && !IsExpired && AllowsSigning && IsTrusted;
 
         /// <summary>
         /// Lý do KHÔNG ký được (null nếu ký được). Trả về thay vì lọc bỏ cert, để khi token đã cắm mà vẫn

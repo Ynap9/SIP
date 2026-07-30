@@ -27,7 +27,9 @@ export interface ISignCert {
   hasPrivateKey: boolean;
   isExpired: boolean;
   allowsSigning: boolean;
-  /** = hasPrivateKey && !isExpired && allowsSigning. */
+  /** Chain về Root G1/G2 đã ghim của Ban Cơ yếu - đúng phép thử mà bước ký áp dụng. */
+  isTrusted: boolean;
+  /** = hasPrivateKey && !isExpired && allowsSigning && isTrusted. */
   canSign: boolean;
   /** Lý do KHÔNG ký được; null/rỗng nếu ký được. */
   reason?: string | null;

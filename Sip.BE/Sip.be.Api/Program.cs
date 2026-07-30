@@ -46,6 +46,29 @@ namespace Sip.be.Api
             Console.WriteLine("EnvironmentName => " + builder.Environment.EnvironmentName);
 
             builder.Logging.ClearProviders();
+
+            // Chốt thư mục ghi log TRƯỚC khi NLog nạp cấu hình (nlog.config đọc SIPPACK_LOG_DIR).
+            // Ưu tiên Log\ cạnh app vì đó là chỗ người dùng tự tìm ra được; chỉ lùi về %AppData% khi
+            // thư mục đó không ghi được. Phải THỬ GHI THẬT chứ không chỉ tạo thư mục: dưới Program Files
+            // lệnh tạo thư mục có thể qua nhờ ảo hoá/quyền thừa kế nhưng ghi file thì vẫn bị chặn.
+            var appLogDir = Path.Combine(AppContext.BaseDirectory, "Log");
+            string logDir;
+            try
+            {
+                Directory.CreateDirectory(appLogDir);
+                var probe = Path.Combine(appLogDir, ".write-test");
+                File.WriteAllText(probe, string.Empty);
+                File.Delete(probe);
+                logDir = appLogDir;
+            }
+            catch
+            {
+                logDir = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "SipPack", "logs");
+                Directory.CreateDirectory(logDir);
+            }
+            Environment.SetEnvironmentVariable("SIPPACK_LOG_DIR", logDir);
+
             builder.Host.UseNLog();
 
             // Add services to the container.

@@ -151,6 +151,19 @@ Section "-Ứng dụng ${APP_NAME}"
   CreateShortcut  "$SMPROGRAMS\${APP_NAME}\Gỡ cài đặt ${APP_NAME}.lnk" "$INSTDIR\Uninstall.exe"
   CreateShortcut  "$DESKTOP\${APP_NAME}.lnk" "$INSTDIR\${APP_EXE}"
 
+  ; Lối tắt mở thẳng thư mục log. Log nằm trong AppData của NGƯỜI DÙNG chứ không nằm trong thư mục
+  ; cài (Program Files không cho ghi), nên phải đổi sang ngữ cảnh user để $APPDATA trỏ đúng chỗ -
+  ; để nguyên "all" thì $APPDATA thành ProgramData và lối tắt trỏ vào hư không.
+  ; Thư mục log nằm ngay cạnh app cho dễ tìm. Program Files mặc định chỉ cho admin ghi, nên phải
+  ; cấp quyền Modify cho nhóm Users trên RIÊNG thư mục này - không có bước đó thì app phải lùi về
+  ; %AppData% và người dùng lại đi tìm log lần nữa.
+  ; Dùng SID *S-1-5-32-545 thay vì tên "Users": tên nhóm đổi theo ngôn ngữ Windows, SID thì không.
+  CreateDirectory "$INSTDIR\Log"
+  nsExec::ExecToLog 'icacls "$INSTDIR\Log" /grant *S-1-5-32-545:(OI)(CI)M'
+  Pop $0
+  DetailPrint "Cấp quyền ghi cho thư mục Log: mã $0"
+  CreateShortcut "$SMPROGRAMS\${APP_NAME}\Nhật ký lỗi (log).lnk" "$INSTDIR\Log"
+
   SetRegView 64
   WriteRegStr   HKLM "${UNINST_KEY}" "DisplayName"     "${APP_NAME} ${APP_VERSION}"
   WriteRegStr   HKLM "${UNINST_KEY}" "DisplayVersion"  "${APP_VERSION}"
@@ -256,6 +269,7 @@ Section "Uninstall"
   Delete "$DESKTOP\${APP_NAME}.lnk"
   Delete "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk"
   Delete "$SMPROGRAMS\${APP_NAME}\Gỡ cài đặt ${APP_NAME}.lnk"
+  Delete "$SMPROGRAMS\${APP_NAME}\Nhật ký lỗi (log).lnk"
   RMDir  "$SMPROGRAMS\${APP_NAME}"
 
   RMDir /r "$INSTDIR"

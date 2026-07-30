@@ -89,6 +89,12 @@ if ($driverMissing) {
     Write-Host "   -> Đặt file vào: $driverSrc" -ForegroundColor Yellow
 }
 
+# 6b) Thư mục Log đi kèm bản build. Có sẵn trong publish nên bản .zip giải ra là ghi log ngay
+#     cạnh app - không phải đi tìm ở AppData. Bản cài được installer cấp quyền ghi cho thư mục này.
+$logOut = Join-Path $publish 'Log'
+New-Item -ItemType Directory -Force -Path $logOut | Out-Null
+Write-Host "==> Tạo thư mục log: $logOut" -ForegroundColor Cyan
+
 # 7) Biên dịch installer bằng NSIS. Chọn NSIS vì giấy phép zlib/libpng cho phép dùng
 #    thương mại vô điều kiện, không license key và không chèn banner vào sản phẩm.
 Write-Host '==> Biên dịch installer (NSIS)...' -ForegroundColor Cyan
@@ -117,7 +123,22 @@ Write-Host '==> Đóng gói bản phát hành (.zip)...' -ForegroundColor Cyan
 $ver = ((Get-Item (Join-Path $publish 'SIPPACK.exe')).VersionInfo.ProductVersion -split '\+')[0]
 $zip = Join-Path $repo "SIPPACK-v$ver-win-x64.zip"
 if (Test-Path $zip) { Remove-Item $zip -Force }
-Compress-Archive -Path (Join-Path $publish '*') -DestinationPath $zip -CompressionLevel Optimal
+# CreateFromDirectory chứ KHÔNG dùng Compress-Archive: Compress-Archive bỏ qua thư mục rỗng, nên
+# thư mục Log\ (rỗng lúc đóng gói) biến mất khỏi bản .zip - đúng thứ vừa cần thêm vào.
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+[System.IO.Compression.ZipFile]::CreateFromDirectory(
+    $publish, $zip, [System.IO.Compression.CompressionLevel]::Optimal, $false)
+
+# Chuẩn hoá entry thư mục rỗng "Log". CreateFromDirectory trên .NET Framework ghi nó thành "Log\",
+# mà chuẩn ZIP quy định dấu phân cách là "/" - vài trình giải nén hiểu "Log\" là TÊN FILE chứ không
+# phải thư mục. Xoá bản sai rồi tạo lại đúng chuẩn, để giải nén ở đâu cũng ra thư mục Log.
+# (App vẫn tự tạo thư mục này lúc khởi động; có sẵn trong zip là để người dùng thấy ngay chỗ chứa log.)
+$archive = [System.IO.Compression.ZipFile]::Open($zip, [System.IO.Compression.ZipArchiveMode]::Update)
+@($archive.Entries | Where-Object { $_.FullName -eq 'Log\' }) | ForEach-Object { $_.Delete() }
+if (-not ($archive.Entries | Where-Object { $_.FullName -eq 'Log/' })) {
+    $archive.CreateEntry('Log/') | Out-Null
+}
+$archive.Dispose()
 Write-Host ("   {0} ({1} MB)" -f $zip, [math]::Round((Get-Item $zip).Length / 1MB, 1)) -ForegroundColor DarkGray
 
 Write-Host ''

@@ -57,13 +57,29 @@ namespace Sip.be.Application.Document.Implements
         {
             _logger.LogInformation($"{nameof(GetCertificates)}, onlySignable={query.OnlySignable}");
 
-            var certs = _certificateProvider.GetCertificates();
+            var scan = _certificateProvider.GetCertificates();
+            var certs = scan.Certificates;
+            var scanInfo = string.Join("; ", scan.StoreDiagnostics);
+            _logger.LogInformation($"{nameof(GetCertificates)}, đã quét: {scanInfo}");
 
-            // Store rỗng = chưa cắm token/chưa cài cert. Báo rõ thay vì trả mảng rỗng không rõ nguyên nhân.
+            // Dump từng chứng thư kèm tên provider giữ khóa. KeyProvider là thứ phân biệt cert nằm trên
+            // USB token với cert phần mềm, nên nếu máy người dùng "chỉ thấy localhost" thì chính danh sách
+            // này chứng minh chứng thư của token chưa được đẩy vào store, chứ không phải app lọc mất.
+            foreach (var c in certs)
+            {
+                _logger.LogInformation(
+                    $"  cert: cn={c.CommonName}, source={c.Source}, hasKey={c.HasPrivateKey}, "
+                    + $"expired={c.IsExpired}, allowsSigning={c.AllowsSigning}, trusted={c.IsTrusted}, canSign={c.CanSign}, "
+                    + $"provider={c.KeyProvider ?? "(không có)"}, reason={c.Reason ?? "(ký được)"}");
+            }
+
+            // Store rỗng = chưa cắm token/chưa cài cert. Kèm luôn kết quả quét từng store vào thông báo:
+            // lỗi này hầu như chỉ xuất hiện trên máy người dùng, nơi không ai mở log ra đọc được.
             if (certs.Count == 0)
             {
                 throw new UserFriendlyException(ErrorCodes.CertificateNotFound,
-                    "Không đọc được chứng thư số nào. Kiểm tra USB token đã cắm và middleware (VGCA PKI Manager/bit4id xPKI) đã chạy chưa.");
+                    "Không đọc được chứng thư số nào. Kiểm tra USB token đã cắm và middleware (VGCA PKI Manager/bit4id xPKI) đã chạy chưa. "
+                    + $"Kết quả quét: {scanInfo}.");
             }
 
             if (query.OnlySignable)
@@ -72,7 +88,7 @@ namespace Sip.be.Application.Document.Implements
                 if (signable.Count == 0)
                 {
                     throw new UserFriendlyException(ErrorCodes.CertificateNotSignable,
-                        "Có chứng thư số nhưng không cái nào dùng để ký được (thiếu khóa bí mật, hết hạn, hoặc không có quyền ký).");
+                        "Có chứng thư số nhưng không cái nào dùng để ký được (thiếu khóa bí mật, hết hạn, không có quyền ký, hoặc không thuộc CA Ban Cơ yếu).");
                 }
                 return signable;
             }
@@ -206,7 +222,14 @@ namespace Sip.be.Application.Document.Implements
         public TokenVerifyDto VerifyToken(string thumbprint)
         {
             _logger.LogInformation($"{nameof(VerifyToken)}, thumbprint={thumbprint}");
-            return _signingKey.Verify(thumbprint);
+
+            // Ghi lại KẾT QUẢ chứ không chỉ lời gọi: đây là bước hay hỏng nhất trên máy người dùng
+            // (token chưa cắm, PIN bị hủy, middleware chưa sẵn sàng, chain không về CA Ban Cơ yếu),
+            // mà mỗi nguyên nhân lại cần một cách xử lý khác hẳn nhau.
+            var result = _signingKey.Verify(thumbprint);
+            _logger.LogInformation(
+                $"{nameof(VerifyToken)}, valid={result.Valid}, failedCheck={result.FailedCheck}, reason={result.Reason}");
+            return result;
         }
 
         /// <inheritdoc/>

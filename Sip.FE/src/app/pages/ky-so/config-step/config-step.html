@@ -36,9 +36,12 @@
     </div>
   </div>
 
+  <!-- Ba cột GIỮ NGUYÊN ở mọi cỡ cửa sổ - không có mốc nào bẻ chúng thành hàng dọc. Thu nhỏ cửa sổ thì cả
+       ba cùng hẹp lại theo đúng tỉ lệ 3/6/3, chỗ người dùng quen nhìn không đổi. Phần chống tràn nằm ở
+       min-w-0 của từng cột và ở bề rộng trang PDF bám khung chứa, không phải ở việc xếp lại bố cục. -->
   <div class="grid grid-cols-12 gap-5">
     <!-- ===== TRÁI: cấu hình ===== -->
-    <div class="col-span-12 flex flex-col gap-5 lg:col-span-3">
+    <div class="col-span-3 flex min-w-0 flex-col gap-5">
       <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 class="mb-4 flex items-center gap-2 text-lg font-semibold text-slate-800">
           <i class="pi pi-sliders-h text-primary"></i>
@@ -160,7 +163,7 @@
     </div>
 
     <!-- ===== GIỮA: xem trước PDF (cuộn qua mọi trang) ===== -->
-    <div class="col-span-12 lg:col-span-6">
+    <div class="col-span-6 min-w-0">
       <div class="flex h-full flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <div class="mb-4 flex items-center justify-between gap-2">
           <div class="min-w-0">
@@ -199,7 +202,13 @@
         </div>
 
         <!-- Mọi trang xếp dọc trong một khung CUỘN: thả chữ ký vào trang nào là ký đúng trang đó -->
-        <div class="relative flex max-h-[70vh] flex-1 flex-col items-center gap-4 overflow-auto rounded-lg bg-slate-100 p-4">
+        <!-- scrollbar-gutter:stable giữ chỗ thanh cuộn dọc kể cả khi chưa cần. Không có nó thì lúc trang thu
+             nhỏ hết cuộn, thanh cuộn biến mất, clientWidth rộng thêm ~15px, trang lại to lên vừa đủ để phải
+             cuộn tiếp - khung rung qua lại không dừng. -->
+        <div
+          #previewWrap
+          class="relative flex max-h-[calc(var(--app-vh,100vh)*0.7)] flex-1 flex-col items-center gap-4 overflow-auto rounded-lg bg-slate-100 p-4 [scrollbar-gutter:stable]"
+        >
           @for (page of pages(); track page.number) {
             <div
               class="pdf-page"
@@ -256,7 +265,7 @@
     </div>
 
     <!-- ===== PHẢI: khối chữ ký mẫu để kéo thả ===== -->
-    <div class="col-span-12 lg:col-span-3">
+    <div class="col-span-3 min-w-0">
       <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 class="mb-2 flex items-center gap-2 text-lg font-semibold text-slate-800">
           <i class="pi pi-pencil text-primary"></i>

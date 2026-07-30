@@ -22,9 +22,10 @@ namespace Sip.be.External.Documents.Implements
         };
 
         /// <inheritdoc/>
-        public List<SignCertDto> GetCertificates()
+        public CertScanResultDto GetCertificates()
         {
             var result = new List<SignCertDto>();
+            var diagnostics = new List<string>();
             var now = DateTimeConstants.VietnamNow;
 
             foreach (var (location, defaultSource) in Stores)
@@ -35,11 +36,16 @@ namespace Sip.be.External.Documents.Implements
                 try
                 {
                     using var store = new X509Store(StoreName.My, location);
-                    store.Open(OpenFlags.ReadOnly | OpenFlags.OpenExistingOnly);
+                    // KHÔNG dùng OpenExistingOnly: trên profile Windows chưa từng có chứng thư cá nhân,
+                    // store "My" chưa được tạo và cờ đó làm Open() ném lỗi -> nhánh catch nuốt mất cả
+                    // store, ra 0 cert như thể máy không có gì. Không có cờ thì store rỗng mở bình thường.
+                    store.Open(OpenFlags.ReadOnly);
                     certs = store.Certificates.OfType<X509Certificate2>().ToList();
+                    diagnostics.Add($"{location}\\My: {certs.Count} chứng thư");
                 }
-                catch
+                catch (Exception ex)
                 {
+                    diagnostics.Add($"{location}\\My: không mở được ({ex.GetType().Name}: {ex.Message})");
                     continue;
                 }
 
@@ -106,6 +112,11 @@ namespace Sip.be.External.Documents.Implements
                         HasPrivateKey = cert.HasPrivateKey,
                         IsExpired = now < cert.NotBefore || now > cert.NotAfter,
                         AllowsSigning = allowsSigning,
+                        // Đúng phép thử mà StoreSigningKey chạy trước khi ký, gọi lại ngay tại đây để danh sách
+                        // không hứa "ký được" rồi bước sau mới chặn. Xét tại UtcNow (mốc tuyệt đối, không phụ
+                        // thuộc múi giờ máy) cho khớp cách SignatureVerifier dựng chain. Chỉ dựng chain offline
+                        // (RevocationMode NoCheck) nên không chạm khóa bí mật, không bật hộp nhập PIN.
+                        IsTrusted = SignatureVerifier.IsTrustedSignerCert(cert, DateTime.UtcNow),
                     };
 
                     // Nêu lý do ĐẦU TIÊN chặn việc ký; null = ký được.
@@ -115,19 +126,25 @@ namespace Sip.be.External.Documents.Implements
                             ? $"Chứng thư số ngoài thời hạn hiệu lực ({dto.ValidFrom} - {dto.ValidTo})."
                             : !dto.AllowsSigning
                                 ? "Chứng thư số không được cấp quyền ký (KeyUsage thiếu digitalSignature/nonRepudiation)."
-                                : null;
+                                : !dto.IsTrusted
+                                    ? "Chứng thư số không thuộc CA Ban Cơ yếu (chain không về Root G1 lẫn Root G2 đã ghim). Ký bằng chứng thư này thì mọi file sẽ bị chặn khi đóng gói."
+                                    : null;
 
                     result.Add(dto);
                 }
             }
 
             // Cùng 1 cert có thể nằm ở cả 2 store -> gộp theo thumbprint, giữ bản ký được.
-            return result
-                .GroupBy(c => c.Thumbprint, StringComparer.OrdinalIgnoreCase)
-                .Select(g => g.OrderByDescending(c => c.CanSign).First())
-                .OrderByDescending(c => c.CanSign)
-                .ThenBy(c => c.CommonName, StringComparer.CurrentCultureIgnoreCase)
-                .ToList();
+            return new CertScanResultDto
+            {
+                Certificates = result
+                    .GroupBy(c => c.Thumbprint, StringComparer.OrdinalIgnoreCase)
+                    .Select(g => g.OrderByDescending(c => c.CanSign).First())
+                    .OrderByDescending(c => c.CanSign)
+                    .ThenBy(c => c.CommonName, StringComparer.CurrentCultureIgnoreCase)
+                    .ToList(),
+                StoreDiagnostics = diagnostics,
+            };
         }
     }
 }

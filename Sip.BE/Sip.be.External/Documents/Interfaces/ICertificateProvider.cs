@@ -14,8 +14,10 @@ namespace Sip.be.External.Documents.Interfaces
         /// chung một đường, không cần PKCS#11.
         /// Trả về cả cert KHÔNG ký được, kèm cờ + <see cref="SignCertDto.Reason"/> để chẩn đoán; việc lọc do
         /// tầng service quyết định. Chỉ đọc metadata của khóa, KHÔNG dùng khóa để ký nên không bật hộp thoại PIN.
-        /// Store nào mở lỗi thì bỏ qua store đó (thường LocalMachine cần quyền), không làm hỏng cả lời gọi.
+        /// Store nào mở lỗi thì bỏ qua store đó (thường LocalMachine cần quyền), không làm hỏng cả lời gọi,
+        /// nhưng lý do bỏ qua được ghi vào <see cref="CertScanResultDto.StoreDiagnostics"/> để chẩn đoán
+        /// được trên máy người dùng — nơi không có debugger và thường cũng không có ai đọc được log.
         /// </summary>
-        List<SignCertDto> GetCertificates();
+        CertScanResultDto GetCertificates();
     }
 }

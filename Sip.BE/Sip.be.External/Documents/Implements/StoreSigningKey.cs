@@ -100,6 +100,28 @@ namespace Sip.be.External.Documents.Implements
                     var rsa = cert.GetRSAPrivateKey();
                     if (rsa != null)
                     {
+                        // Chỉ cho khóa CNG (KSP): báo cho middleware cửa sổ chủ của hộp PIN trước khi ký thử.
+                        // NCRYPT_WINDOW_HANDLE_PROPERTY có tên chuỗi đúng là "HWND Handle". Không set thì hộp
+                        // thoại PIN không có chủ - luồng gọi là luồng request của Kestrel, không sở hữu cửa sổ
+                        // nào - nên nó hiện chìm sau cửa sổ app hoặc không hiện, và người dùng bị kẹt ở đây.
+                        // Khóa dạng CSP đời cũ không nhận thuộc tính này; host đặt PP_CLIENT_HWND cấp tiến trình.
+                        if (rsa is RSACng rsaCng && SigningUiContext.WindowHandle != IntPtr.Zero)
+                        {
+                            try
+                            {
+                                var hwndBytes = IntPtr.Size == 8
+                                    ? BitConverter.GetBytes(SigningUiContext.WindowHandle.ToInt64())
+                                    : BitConverter.GetBytes(SigningUiContext.WindowHandle.ToInt32());
+                                rsaCng.Key.SetProperty(
+                                    new CngProperty("HWND Handle", hwndBytes, CngPropertyOptions.None));
+                            }
+                            catch
+                            {
+                                // Middleware không hỗ trợ thuộc tính này -> vẫn ký thử bình thường, hộp PIN
+                                // có thể hiện không đúng lớp nhưng chặn ở đây thì mất luôn đường ký.
+                            }
+                        }
+
                         rsa.SignData(probe, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
                         _cachedRsa = rsa;
                     }
@@ -225,7 +247,10 @@ namespace Sip.be.External.Documents.Implements
                 try
                 {
                     using var store = new X509Store(StoreName.My, location);
-                    store.Open(OpenFlags.ReadOnly | OpenFlags.OpenExistingOnly);
+                    // KHÔNG dùng OpenExistingOnly: store "My" được Windows tạo lười, profile chưa từng có
+                    // chứng thư cá nhân thì cờ này làm Open() ném lỗi và nhánh catch nuốt mất cả store.
+                    // Xem docs/bug/cert-store-openexistingonly-skips-whole-store.md.
+                    store.Open(OpenFlags.ReadOnly);
                     var found = store.Certificates
                         .OfType<X509Certificate2>()
                         .FirstOrDefault(c => string.Equals(c.Thumbprint, thumbprint, StringComparison.OrdinalIgnoreCase));
