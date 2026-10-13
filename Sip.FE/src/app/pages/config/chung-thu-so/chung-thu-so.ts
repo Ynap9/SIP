@@ -1,4 +1,4 @@
-import { Component, computed, inject, OnInit, output, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { TagModule } from 'primeng/tag';
 
 import { SharedImports } from '../../../shared/import.shared';
@@ -7,7 +7,8 @@ import { DataTable } from '../../../shared/components/data-table/data-table';
 import { IColumn } from '../../../shared/models/data-table.models';
 import { CellViewTypes } from '../../../shared/constants/data-table.constants';
 import { SignService } from '../../../services/sign.service';
-import { ISignCert, ITokenVerify } from '../../../models/sign.models';
+import { SignCertStateService } from '../../../services/sign-cert-state.service';
+import { ISignCert } from '../../../models/sign.models';
 import {
   CERT_NOT_SIGNABLE_LABEL,
   CERT_SIGNABLE_LABEL,
@@ -16,41 +17,43 @@ import {
   ECertSource
 } from '../../../shared/constants/sign.constants';
 
-// 1 dòng bảng = 1 cert + các trường dựng sẵn để hiển thị (data-table đọc thẳng field, không gọi hàm).
 interface ICertRow extends ISignCert {
   sourceLabel: string;
   statusLabel: string;
 }
 
 @Component({
-  selector: 'app-cert-step',
-  // TagModule không nằm trong SharedImports -> import trực tiếp tại trang.
+  selector: 'app-chung-thu-so',
   imports: [...SharedImports, TagModule, DataTable],
-  templateUrl: './cert-step.html',
-  styleUrl: './cert-step.scss'
+  templateUrl: './chung-thu-so.html',
+  styleUrl: './chung-thu-so.scss'
 })
-export class CertStep extends BaseComponent implements OnInit {
+export class ChungThuSo extends BaseComponent implements OnInit {
   private signService = inject(SignService);
-
-  // Kiểm token OK -> phát chứng thư đã xác thực để shell sang bước ký.
-  verified = output<ITokenVerify>();
+  private certState = inject(SignCertStateService);
 
   rows = signal<ICertRow[]>([]);
   tableLoading = signal<boolean>(false);
   verifying = signal<boolean>(false);
-  /** Thumbprint của cert đang chọn (thumbprint duy nhất toàn cục, serial thì không). */
+  onlySignable = signal<boolean>(false);
   selectedThumbprint = signal<string | null>(null);
 
-  /** Cert đang chọn, null nếu chưa chọn. */
+  visibleRows = computed<ICertRow[]>(() =>
+    this.onlySignable() ? this.rows().filter((row) => row.canSign) : this.rows()
+  );
+
   selectedCert = computed<ICertRow | null>(
     () => this.rows().find((row) => row.thumbprint === this.selectedThumbprint()) ?? null
   );
 
-  /** Đã chọn nhưng cert KHÔNG ký được -> hiện cảnh báo chặn. */
   hasInvalidSelection = computed<boolean>(() => {
     const cert = this.selectedCert();
     return !!cert && !cert.canSign;
   });
+
+  isVerified = computed<boolean>(
+    () => !!this.selectedThumbprint() && this.certState.verifiedCert()?.thumbprint === this.selectedThumbprint()
+  );
 
   signableCount = computed<number>(() => this.rows().filter((row) => row.canSign).length);
   tokenCount = computed<number>(() => this.rows().filter((row) => row.source === ECertSource.UsbToken).length);
@@ -80,7 +83,10 @@ export class CertStep extends BaseComponent implements OnInit {
     this.loadCertificates();
   }
 
-  /** Nạp danh sách cert. Lấy HẾT (kể cả cert không ký được) để người dùng thấy lý do, không phải list rỗng. */
+  toggleOnlySignable(): void {
+    this.onlySignable.update((value) => !value);
+  }
+
   loadCertificates(): void {
     this.tableLoading.set(true);
     this.signService.getCertificates().subscribe({
@@ -93,9 +99,13 @@ export class CertStep extends BaseComponent implements OnInit {
           }));
           this.rows.set(data);
 
-          // Chỉ có đúng 1 cert ký được -> chọn sẵn, đỡ một thao tác cho trường hợp phổ biến nhất (1 token).
+          const verified = this.certState.verifiedCert();
           const signable = data.filter((cert) => cert.canSign);
-          this.selectedThumbprint.set(signable.length === 1 ? signable[0].thumbprint : null);
+          if (verified && data.some((cert) => cert.thumbprint === verified.thumbprint)) {
+            this.selectedThumbprint.set(verified.thumbprint);
+          } else {
+            this.selectedThumbprint.set(signable.length === 1 ? signable[0].thumbprint : null);
+          }
         } else {
           this.rows.set([]);
           this.selectedThumbprint.set(null);
@@ -111,10 +121,6 @@ export class CertStep extends BaseComponent implements OnInit {
     });
   }
 
-  /**
-   * Chọn cert -> kiểm luôn qua kiem-tra-token (hộp nhập PIN của token bật lên tại đây). valid=true thì
-   * TỰ ĐỘNG sang bước ký; cert không ký được thì cảnh báo và không gọi API.
-   */
   onSelectCert(thumbprint: string): void {
     this.selectedThumbprint.set(thumbprint);
     const cert = this.selectedCert();
@@ -123,14 +129,10 @@ export class CertStep extends BaseComponent implements OnInit {
       this.messageWarning(cert.reason || 'Chứng thư số này không dùng để ký được.');
       return;
     }
-    this.verifyAndAdvance(thumbprint);
+    this.verify(thumbprint);
   }
 
-  /**
-   * Kiểm chứng thư số qua kiem-tra-token rồi tự sang bước ký khi hợp lệ.
-   * valid=true mới emit verified; ngược lại giữ nguyên bước 1 và báo bước hỏng.
-   */
-  private verifyAndAdvance(thumbprint: string): void {
+  verify(thumbprint: string): void {
     if (this.verifying()) return;
     this.verifying.set(true);
     this.signService.verifyToken(thumbprint).subscribe({
@@ -139,8 +141,10 @@ export class CertStep extends BaseComponent implements OnInit {
         if (!this.isResponseSucceed(res)) return;
         const data = res.data;
         if (data?.valid) {
-          this.verified.emit(data);
+          this.certState.verifiedCert.set(data);
+          this.messageSuccess('Chứng thư số đã sẵn sàng để ký.');
         } else {
+          this.certState.verifiedCert.set(null);
           this.messageError(
             data?.reason || 'Chứng thư số chưa sẵn sàng để ký. Vui lòng kiểm tra lại token/PIN.'
           );

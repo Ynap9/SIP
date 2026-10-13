@@ -14,13 +14,6 @@ namespace Sip.be.External.Documents.Interfaces
     /// </summary>
     public interface ISignaturePlacementResolver
     {
-        /// <summary>
-        /// Tính ô chữ ký cuối cùng (hệ tọa độ PDF: point, gốc dưới-trái) cho trang có khung
-        /// <paramref name="pageBox"/> lấy từ /MediaBox.
-        /// <paramref name="placement"/> null = vị trí mặc định: góc TRÊN-PHẢI, khổ 170x30pt của file
-        /// production đã co giãn theo khổ trang thật.
-        /// Kết quả luôn NẰM TRỌN trong trang.
-        /// </summary>
-        PdfRectDto Resolve(PdfRectDto pageBox, PdfSignPlacementDto? placement);
+        PdfRectDto Resolve(PdfRectDto pageBox, PdfSignPlacementDto? placement, double width, double height);
     }
 }

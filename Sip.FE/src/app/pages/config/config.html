@@ -1,23 +1,14 @@
-<div class="flex flex-col gap-4">
+<div class="flex min-h-0 flex-1 flex-col gap-4">
   <app-breadcrumb [home]="home" [items]="breadcrumbItems" />
 
-  <div class="flex items-center gap-2">
-    <label class="font-medium">Loại cấu hình:</label>
-    <p-select
-      [options]="options"
-      [ngModel]="selected()"
-      optionLabel="label"
-      optionValue="value"
-      placeholder="Chọn loại cấu hình"
-      (onChange)="selected.set($event.value); onSelect()"
-    />
-  </div>
-
-  <app-data-table
-    [columns]="columns"
-    [data]="rows()"
-    [loading]="tableLoading()"
-    [hidePaginator]="true"
-    [pageSize]="rows().length"
+  <p-selectbutton
+    [options]="tabOptions"
+    [ngModel]="tab()"
+    optionLabel="label"
+    optionValue="value"
+    [allowEmpty]="false"
+    (onChange)="onTabChange($event.value)"
   />
+
+  <router-outlet />
 </div>

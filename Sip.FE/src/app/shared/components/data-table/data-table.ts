@@ -30,6 +30,12 @@ export class DataTable implements OnInit, AfterViewInit {
     loading    = input<boolean>(false);
     tableKey   = input<string>('');
     hidePaginator = input<boolean>(false);
+    /**
+     * Bật cuộn BÊN TRONG bảng (tiêu đề ghim lại, chỉ phần thân cuộn) thay vì để bảng dài ra kéo cả trang.
+     * Để trống là giữ nguyên hành vi cũ. Dùng 'flex' để bảng cao đúng bằng khung cha (khung cha phải có
+     * chiều cao xác định, ví dụ class .table-frame), hoặc một giá trị CSS cố định như '24rem'.
+     */
+    scrollHeight = input<string>('');
 
     @Output() onPageChanged = new EventEmitter<any>();
     @Output() customEmit    = new EventEmitter<any>();

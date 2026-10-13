@@ -24,20 +24,56 @@ namespace Sip.be.External.Documents.Implements
     /// </summary>
     public static class PdfAppearanceBuilder
     {
-        /// <summary>
-        /// Vẽ khối chữ ký rồi trả về cây object đã đánh số bắt đầu từ <paramref name="firstObjectNumber"/>.
-        /// <paramref name="width"/>/<paramref name="height"/> là khổ ô chữ ký thật trên trang (point) do
-        /// <c>ISignaturePlacementResolver</c> tính; mọi số đo bên trong (cỡ chữ, lề, vị trí 2 dòng) được nhân
-        /// theo tỉ lệ so với khổ chuẩn 170x30pt, nên ô to thì chữ to theo chứ không phải chữ giữ nguyên cỡ
-        /// rồi lọt thỏm hoặc tràn ra khỏi hộp.
-        /// </summary>
-        public static AppearanceResult Build(string line1, string line2, int firstObjectNumber,
-            double width, double height)
+        public static (double Width, double Height) MeasureText(string line1, string line2, string fontFamily,
+            double fontSize)
         {
-            // Tỉ lệ lấy theo CHIỀU CAO: hai dòng chữ xếp theo chiều dọc nên chiều cao mới là chiều quyết định
-            // cỡ chữ; lấy theo bề rộng thì ô rộng-thấp sẽ có chữ cao hơn cả hộp.
-            var scale = height / SigningConstants.AppearanceHeight;
+            var font = new XFont(fontFamily, fontSize);
+            using var gfx = XGraphics.CreateMeasureContext(new XSize(1, 1), XGraphicsUnit.Point,
+                XPageDirection.Downwards);
 
+            return (Math.Max(gfx.MeasureString(line1, font).Width, gfx.MeasureString(line2, font).Width),
+                font.GetHeight() * 2);
+        }
+
+        public static AppearanceResult Build(string line1, string line2, int firstObjectNumber,
+            double width, double height, string fontFamily, double fontSize, string textColor)
+        {
+            var hex = (textColor ?? string.Empty).TrimStart('#');
+            var color = hex.Length == 6 && int.TryParse(hex, System.Globalization.NumberStyles.HexNumber,
+                System.Globalization.CultureInfo.InvariantCulture, out var rgb)
+                ? XColor.FromArgb((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF)
+                : XColors.Black;
+
+            return DrawAndTransplant(firstObjectNumber, width, height, gfx =>
+            {
+                var font = new XFont(fontFamily, fontSize);
+                var brush = new XSolidBrush(color);
+                var lineHeight = font.GetHeight();
+
+                gfx.DrawString(line1, font, brush, new XRect(0, 0, width, lineHeight), XStringFormats.TopLeft);
+                gfx.DrawString(line2, font, brush, new XRect(0, lineHeight, width, lineHeight),
+                    XStringFormats.TopLeft);
+            });
+        }
+
+        public static AppearanceResult BuildImage(byte[] image, int firstObjectNumber, double width, double height)
+        {
+            using var stream = new MemoryStream(image);
+            var xImage = XImage.FromStream(stream);
+
+            return DrawAndTransplant(firstObjectNumber, width, height, gfx =>
+            {
+                var scale = Math.Min(width / xImage.PointWidth, height / xImage.PointHeight);
+                var drawWidth = xImage.PointWidth * scale;
+                var drawHeight = xImage.PointHeight * scale;
+                gfx.DrawImage(xImage, new XRect((width - drawWidth) / 2, (height - drawHeight) / 2,
+                    drawWidth, drawHeight));
+            });
+        }
+
+        private static AppearanceResult DrawAndTransplant(int firstObjectNumber, double width, double height,
+            Action<XGraphics> draw)
+        {
             byte[] tempPdf;
             using (var document = new PdfDocument())
             {
@@ -52,16 +88,7 @@ namespace Sip.be.External.Documents.Implements
 
                 using (var gfx = XGraphics.FromPdfPage(page))
                 {
-                    var font = new XFont(SigningConstants.AppearanceFontFamily,
-                        SigningConstants.AppearanceFontSize * scale);
-
-                    // Hai dòng CANH GIỮA ô: chia ô làm hai nửa theo chiều cao rồi canh giữa mỗi dòng trong nửa
-                    // của nó — cả khối chữ nằm chính giữa ô người dùng kéo thả, ô rộng bao nhiêu cũng cân.
-                    // (File production dóng trái ở x=2pt; canh giữa là yêu cầu nghiệp vụ, không phải số đo cũ.)
-                    gfx.DrawString(line1, font, XBrushes.Black,
-                        new XRect(0, 0, width, height / 2), XStringFormats.Center);
-                    gfx.DrawString(line2, font, XBrushes.Black,
-                        new XRect(0, height / 2, width, height / 2), XStringFormats.Center);
+                    draw(gfx);
                 }
 
                 using var ms = new MemoryStream();

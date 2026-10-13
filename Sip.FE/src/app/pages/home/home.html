@@ -1,57 +1,80 @@
-<div class="flex flex-col gap-8">
-  <!-- Hero -->
-  <section class="overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 to-indigo-800 px-8 py-12 text-white shadow-sm">
-    <div class="flex max-w-3xl flex-col gap-4">
-      <span class="inline-flex w-fit items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-sm font-medium">
-        <i class="pi pi-verified"></i> Chuẩn Thông tư 05/2025/TT-BNV
-      </span>
-      <h1 class="text-3xl font-bold leading-tight md:text-4xl">
-        Đóng gói tài liệu lưu trữ số (SIP_tailieu)
-      </h1>
-      <p class="text-lg text-indigo-100">
-        SIPPACK giúp kiểm tra hồ sơ và đóng gói tài liệu nộp lưu thành gói SIP theo chuẩn
-        E-ARK / TT05 — nhanh, chính xác và đúng quy định.
-      </p>
-      <div class="mt-2 flex flex-wrap gap-3">
-        <p-button label="Bắt đầu đóng gói" icon="pi pi-box" severity="contrast" routerLink="/dong-goi" />
-        <p-button label="Ký số tài liệu" icon="pi pi-verified" severity="contrast" [text]="true" routerLink="/ky-so" />
-        <p-button label="Cấu hình danh mục" icon="pi pi-cog" severity="contrast" [text]="true" routerLink="/cau-hinh" />
+<div class="mx-auto flex w-full max-w-[1280px] flex-1 flex-col justify-center gap-6">
+  <header class="flex items-center justify-between gap-6 rounded-lg border border-slate-200 bg-gradient-to-r from-slate-50 to-white px-6 py-5">
+    <div class="flex items-center gap-4">
+      <img src="favicon.ico" alt="" class="h-14 w-14" />
+      <div class="flex flex-col gap-1">
+        <h1 class="text-2xl font-semibold tracking-tight text-slate-800">SIPPACK</h1>
+        <p class="text-sm text-slate-500">
+          Kiểm tra, ký số và đóng gói tài liệu lưu trữ số (SIP_tailieu) theo Thông tư 05/2025/TT-BNV.
+        </p>
       </div>
     </div>
-  </section>
+    <span class="flex shrink-0 items-center gap-2 rounded-md border border-indigo-100 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700">
+      <i class="pi pi-verified"></i>
+      Chuẩn TT05 · E-ARK CSIP
+    </span>
+  </header>
 
-  <!-- Feature cards: đủ 4 chức năng của menu -->
-  <section class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-    @for (f of features; track f.title) {
-      <a
-        [routerLink]="f.link"
-        class="group flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-6 transition hover:border-indigo-300 hover:shadow-md"
-      >
-        <span class="flex h-12 w-12 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
-          <i [class]="f.icon" class="text-xl"></i>
-        </span>
-        <h3 class="text-lg font-semibold text-slate-800">{{ f.title }}</h3>
-        <p class="text-sm leading-relaxed text-slate-500">{{ f.desc }}</p>
-        <span class="mt-auto inline-flex items-center gap-1 pt-2 text-sm font-medium text-indigo-600 transition-all group-hover:gap-2">
-          Mở chức năng <i class="pi pi-arrow-right text-xs"></i>
-        </span>
-      </a>
-    }
-  </section>
+  <div class="grid grid-cols-12 gap-5">
+    <section class="col-span-8 flex flex-col gap-3">
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Chức năng</h2>
+        <span class="text-xs text-slate-400">Chọn một chức năng để bắt đầu</span>
+      </div>
 
-  <!-- Quy trình đầy đủ, theo đúng thứ tự phải làm -->
-  <section class="flex flex-col gap-4">
-    <h2 class="text-xl font-semibold text-slate-800">Quy trình 4 bước</h2>
-    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      @for (s of steps; track s.no) {
-        <div class="relative flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-5">
-          <span class="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-600 text-sm font-bold text-white">
-            {{ s.no }}
-          </span>
-          <h3 class="font-semibold text-slate-800">{{ s.title }}</h3>
-          <p class="text-sm leading-relaxed text-slate-500">{{ s.desc }}</p>
+      <div class="grid grid-cols-2 gap-4">
+        @for (f of features; track f.title) {
+          <a
+            [routerLink]="f.link"
+            draggable="false"
+            class="group flex cursor-default flex-col gap-3 rounded-lg border border-slate-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow-md"
+          >
+            <div class="flex items-center gap-3">
+              <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-blue-600 text-white shadow-sm">
+                <i [class]="f.icon" style="font-size: 1.25rem"></i>
+              </span>
+              <h3 class="flex-1 text-base font-semibold text-slate-800">{{ f.title }}</h3>
+              <i class="pi pi-arrow-up-right text-slate-300 transition-colors group-hover:text-indigo-500" style="font-size: 0.75rem"></i>
+            </div>
+            <p class="text-sm leading-relaxed text-slate-500">{{ f.desc }}</p>
+          </a>
+        }
+      </div>
+    </section>
+
+    <section class="col-span-4 flex flex-col gap-3">
+      <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Quy trình 4 bước</h2>
+
+      <ol class="flex flex-1 flex-col justify-between rounded-lg border border-slate-200 bg-white px-5 py-4 shadow-sm">
+        @for (s of steps; track s.no; let last = $last) {
+          <li class="relative flex gap-4" [class.pb-4]="!last">
+            @if (!last) {
+              <span class="absolute left-4 top-9 -bottom-1 w-px -translate-x-1/2 bg-indigo-100"></span>
+            }
+            <span class="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-sm font-semibold text-white ring-4 ring-indigo-50">
+              {{ s.no }}
+            </span>
+            <div class="flex flex-col gap-0.5">
+              <h3 class="text-sm font-semibold text-slate-800">{{ s.title }}</h3>
+              <p class="text-sm leading-relaxed text-slate-500">{{ s.desc }}</p>
+            </div>
+          </li>
+        }
+      </ol>
+    </section>
+  </div>
+
+  <section class="grid grid-cols-4 divide-x divide-slate-200 rounded-lg border border-slate-200 bg-slate-50">
+    @for (item of standards; track item.title) {
+      <div class="flex items-center gap-3 px-5 py-4">
+        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-white text-indigo-600 shadow-sm ring-1 ring-slate-200">
+          <i [class]="item.icon"></i>
+        </span>
+        <div class="flex min-w-0 flex-col">
+          <span class="truncate text-sm font-semibold text-slate-700">{{ item.title }}</span>
+          <span class="truncate text-xs text-slate-500">{{ item.desc }}</span>
         </div>
-      }
-    </div>
+      </div>
+    }
   </section>
 </div>

@@ -4,7 +4,7 @@ Reusable steps to add any new route page. Read `docs/project-structure.md` first
 
 ## Checklist
 1. **Model** `src/app/models/<feature>.models.ts` — DTO **interfaces only**, matching BE fields (camelCase).
-   Enums / label maps / constants go in `src/app/shared/constants/<feature>.constants.ts` (see `docs/project-structure.md` §11).
+   Enums / label maps / constants go in `src/app/shared/constants/<feature>.constants.ts` (see `docs/shared-and-conventions.md` §5).
 2. **Service** `src/app/services/<feature>.service.ts` — `@Injectable({ providedIn: 'root' })`, inject `HttpClient`, base from `environment.baseUrl`. Return `IBaseResponse` / `IBaseResponseWithData<T>`.
 3. **Page** `src/app/pages/<feature>/<feature>.ts|html|scss` — standalone, `extends BaseComponent`, `imports: [...SharedImports, <shared components used>]`.
 4. **Route** — add `{ path: '<path>', component: <Page> }` under `Layout.children` in `src/app.routes.ts`.
@@ -106,7 +106,9 @@ while (true) {
 - "Coming soon"/empty state: a centered muted text block.
 
 ## Folder input (desktop) pattern
-- A drag-drop box (desktop/Electron-Tauri exposes the dropped folder's absolute path) PLUS a TEMP text input to paste an absolute path for web-dev testing. Clearly mark the temp input `REMOVE on desktop build`.
+- A drag-drop box PLUS a "Chọn thư mục" button wired to `DesktopService.pickFolder()`, PLUS a text input to paste an
+  absolute path. Keep all three: the paste input is the fallback under `ng serve`, where `window.external` is absent.
+- Guard native calls on `DesktopService.isDesktop`; normalise any pasted value with `Utils.normalizeFolderPath()`.
 - The BE check works on a local absolute folder path; never upload files.
 
 ## PrimeNG modules note

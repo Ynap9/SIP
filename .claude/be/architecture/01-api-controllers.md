@@ -10,7 +10,8 @@ Sip.be.Api/
     ├── CheckController.cs
     ├── PackController.cs
     ├── UnpackController.cs
-    └── SignController.cs
+    ├── SignController.cs
+    └── SignTemplateController.cs     # route api/core/document/template-chu-ky
 ```
 (`Controllers/WeatherForecastController.cs` is leftover template scaffolding — not part of the app.)
 
@@ -33,7 +34,7 @@ public ApiResponse GetConfigHoSo()
 ```
 Note: actions return HTTP 200 even on business errors; the real status lives in `ApiResponse.Status`/`Code` (see [06-shared.md](06-shared.md)).
 
-**One documented exception:** `GET sign/xem-file` returns the **raw PDF bytes** (`IActionResult` + `File(...)`), not an envelope — the output feeds pdf.js in the browser, and a JSON wrapper would make it unreadable. Errors there return HTTP 404. Every other action keeps the envelope.
+**Two documented exceptions:** `GET sign/xem-file` returns the **raw PDF bytes** (`IActionResult` + `File(...)`), not an envelope — the output feeds pdf.js in the browser, and a JSON wrapper would make it unreadable. `GET template-chu-ky/xem-anh` does the same for seal / wet-signature images (`.png/.jpg/.jpeg` only). Errors there return HTTP 404. Every other action keeps the envelope.
 
 ## BaseController.OkException(ex)
 Central error translator. Inspects the exception type and builds an error `ApiResponse`:
@@ -48,6 +49,13 @@ Five actions stream progress instead of returning a body — `check/ho-so-folder
 - Disables response buffering (`IHttpResponseBodyFeature.DisableBuffering()`) for realtime push.
 - Iterates `await foreach (var p in _checkService.CheckHoSoFolderAsync(input, HttpContext.RequestAborted))`, serializes each event as **camelCase** JSON and writes `data: {json}\n\n`, then flushes.
 - Always thread `HttpContext.RequestAborted` so the client cancelling stops the work.
+
+## Paged list actions (`SignTemplateController`)
+The only controller with full CRUD + paging. `GET template-chu-ky/find-paging` takes `[FromQuery] BaseRequestPagingDto`
+and returns `ApiResponse<BaseResponsePagingDto<ViewSignTemplateDto>>` (`items`, `totalItems`, `customData`) —
+see [06-shared.md](06-shared.md). `pageSize = -1` means "no paging, return everything".
+Its other actions are the standard shape: `POST`/`PUT` at the route root, `DELETE {id:int}`, `GET {id:int}`,
+plus `GET template-chu-ky/file-mau` for the bundled sample PDF and `GET template-chu-ky/xem-anh` (raw image, see above).
 
 ## Non-SSE actions on CheckController
 Besides the two SSE streams, `CheckController` also exposes standard `ApiResponse` actions (try/catch → `OkException`):

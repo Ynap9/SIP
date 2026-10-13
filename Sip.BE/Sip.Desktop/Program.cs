@@ -84,6 +84,7 @@ namespace Sip.Desktop
             // Mở cửa sổ WebView2 trỏ tới SPA do chính Kestrel phục vụ
             var window = new PhotinoWindow()
                 .SetTitle(AppTitle)
+                .SetIconFile(Path.Combine(AppContext.BaseDirectory, "Assets", "sippack.ico"))
                 .SetUseOsDefaultSize(false)
                 .SetSize(1280, 820)
                 .Center()
@@ -334,6 +335,23 @@ namespace Sip.Desktop
                         RunInstallerElevated("msiexec.exe", $"/i \"{msi}\" /qn /norestart", skipMarker);
                     }
                 }
+
+                bool tokenManagerInstalled;
+                using (var hklm64 = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64))
+                using (var key = hklm64.OpenSubKey(@"SOFTWARE\Microsoft\Cryptography\Defaults\Provider"))
+                {
+                    tokenManagerInstalled = key != null && key.GetSubKeyNames()
+                        .Any(name => name.StartsWith("eToken", StringComparison.OrdinalIgnoreCase));
+                }
+                if (!tokenManagerInstalled)
+                {
+                    tokenManagerInstalled = File.Exists(Path.Combine(Environment.SystemDirectory, "eTOKCSP.dll"));
+                }
+                if (!tokenManagerInstalled)
+                {
+                    var tokenManager = Directory.GetFiles(driversDir, "VGCAv1_Installer*.exe").FirstOrDefault();
+                    if (tokenManager != null) RunInstallerElevated(tokenManager, "/S", skipMarker);
+                }
             }
             catch
             {
@@ -389,6 +407,13 @@ namespace Sip.Desktop
                 var paths = window.ShowOpenFile("Chọn file gói SIP (.zip)", null, false, filters);
                 var path = (paths != null && paths.Length > 0) ? paths[0] : string.Empty;
                 window.SendWebMessage("file:" + path);
+            }
+            else if (message == "pickImage")
+            {
+                var filters = new (string Name, string[] Extensions)[] { ("Ảnh (*.png, *.jpg, *.jpeg)", new[] { "png", "jpg", "jpeg" }) };
+                var paths = window.ShowOpenFile("Chọn ảnh", null, false, filters);
+                var path = (paths != null && paths.Length > 0) ? paths[0] : string.Empty;
+                window.SendWebMessage("image:" + path);
             }
             else if (message.StartsWith("openPath:", StringComparison.Ordinal))
             {

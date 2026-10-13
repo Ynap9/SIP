@@ -1,17 +1,18 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
-import { ConfigStep } from './config-step';
+import { HoSoVanBan } from './ho-so-van-ban';
 
-describe('ConfigStep', () => {
-  let component: ConfigStep;
-  let fixture: ComponentFixture<ConfigStep>;
+describe('HoSoVanBan', () => {
+  let component: HoSoVanBan;
+  let fixture: ComponentFixture<HoSoVanBan>;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [ConfigStep]
-    }).compileComponents();
+      imports: [HoSoVanBan]
+    })
+    .compileComponents();
 
-    fixture = TestBed.createComponent(ConfigStep);
+    fixture = TestBed.createComponent(HoSoVanBan);
     component = fixture.componentInstance;
     fixture.detectChanges();
   });

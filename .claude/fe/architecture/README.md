@@ -14,7 +14,7 @@
 src/
 ├── main.ts / app.ts / app.config.ts / app.routes.ts   # bootstrap (files live in src/, not src/app/)
 └── app/
-    ├── layout/       # shell: layout, topbar, sidebar, footer, menu + LayoutService
+    ├── layout/       # shell: layout, topbar (nav tabs), menu, footer + LayoutService
     ├── pages/        # home, config, dong-goi/{check,multi}, boc-tach, ky-so — lazy-loaded via *.router.ts
     ├── services/     # config, check, multi-check, pack, multi-pack, unpack, sign, desktop (root-provided)
     ├── models/       # per-feature interfaces (config, check, multi-check, pack, multi-pack, unpack, sign)
@@ -32,7 +32,7 @@ src/
 
 ## The UI flows (mirror the BE)
 - **Home** (`pages/home`) — landing.
-- **Config** (`pages/config`, `/cau-hinh`) — view ConfigHoSo / ConfigVanBan tables.
+- **Config** (`pages/config`, `/cau-hinh`) — shell with tabs (`p-selectbutton` + `<router-outlet/>`, like `dong-goi`): `ho-so-van-ban` (ConfigHoSo / ConfigVanBan tables), `chung-thu-so` (certificate list, "only signable" filter button, pick + PIN check → `SignCertStateService`), `template-chu-ky` (paged sign-template list) and `template-chu-ky/:id` (editor: cert, reason/location, seal / wet-signature images picked from the machine, signature font / size / colour, blank A4 preview by default or a folder's PDFs via `pdfjs-dist`, drag-drop blocks).
 - **Check + Pack** (`pages/dong-goi`, `/dong-goi`) — `check` = one hồ sơ, `multi` = a parent folder; pick a folder, stream results (SSE), then pack. Both routes carry `data: { reuse: true }` (see `shared/app-route-reuse.strategy.ts`).
-- **Sign** (`pages/ky-so`, `/ky-so`) — 3-step wizard: `cert-step` (pick certificate/token) → `config-step` (PDF preview with `pdfjs-dist`, drag-drop the signature position, pages-to-stamp, overlap option) → `sign-step` (PDF/A gate + sign, SSE).
+- **Sign** (`pages/ky-so`, `/ky-so`) — one page: pick the folder, a sign template and a certificate (defaults to the template's, "Xác thực PIN" button; if not yet verified, clicking "Ký số" runs `kiem-tra-token` first), then `sign-step` (format pre-check + sign, SSE; non-two-layer PDF/A is only a warning, non-PDF / unreadable files are skipped; the sign dialog is prefilled with the template's reason/location).
 - **Unpack** (`pages/boc-tach`, `/boc-tach`) — reverse a SIP `.zip`/folder, browse the result with `shared/components/file-tree`.

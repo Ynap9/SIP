@@ -52,10 +52,18 @@
 6. **Project `Sip.Desktop`**: reference `Sip.be.Api` + Photino.NET; `Main()`: set the AppData connection string →
    `BuildApp` → bind a free port → `StartAsync` (background) → open `PhotinoWindow` at the URL + a
    `WebMessageReceived` handler (pickFolder/openPath) → `WaitForClose` → shutdown. `dotnet build`.
-7. **Publish + installer** (DONE, v2.2.0): `Sip.BE/build-desktop.ps1` is now the whole pipeline — Angular desktop
+7. **Publish + installer** (DONE, v2.3.0): `Sip.BE/build-desktop.ps1` is now the whole pipeline — Angular desktop
    build → `dotnet publish -r win-x64 --self-contained -p:PublishSingleFile=true` → `publish/` → verify the 5
-   pinned CA `.crt` files and the 3 dependency installers → `makensis SIPPACK.nsi` → `SIPPACK-v<ver>-win-x64.zip`.
-   Output: `installer-output/SIPPACK-Setup.exe` (~137 MB) and a ~57 MB install dir.
+   pinned CA `.crt` files and the 4 dependency installers → `makensis SIPPACK.nsi` → `SIPPACK-v<ver>-win-x64.zip`.
+   Output: `installer-output/SIPPACK-Setup.exe` (~192 MB) and `SIPPACK-v2.3.0-win-x64.zip` (~193 MB).
+
+   **Version** lives in 3 places, bump together: `Sip.Desktop.csproj` (`Version`/`FileVersion`/`AssemblyVersion`)
+   and `SIPPACK.nsi` (`APP_VERSION`, `VIProductVersion`); the zip name is read from the built exe.
+
+   **Icon**: `Sip.Desktop/Assets/sippack.ico` (Fluent-style box + check badge, 16–256 px, same style as the
+   Ký số Plugin icon) = `ApplicationIcon` of the exe, Photino window icon (`SetIconFile`, so the item is
+   `Content` with `ExcludeFromSingleFile="true"` to stay next to the exe), NSIS `MUI_ICON`/`MUI_UNICON`, and
+   `Sip.FE/public/favicon.ico` (also the topbar logo).
 
    **Install-dir layout** — the app folder has two dedicated subfolders, and both ship in the `.zip` as well as
    in the setup: `certs/` (the 5 pinned CA files; `Sip.be.Api.csproj` puts them there via `Link`, and
@@ -64,8 +72,9 @@
    gitignored). Because `drivers/` is inside `publish/`, the setup ships it through the ordinary `File /r` and
    runs the installers from `$INSTDIR\drivers\` — no second embedded copy.
 
-   Silent switches: `/S` (bit4id, itself NSIS), `msiexec /qn /norestart /l*v` (GCA01-Client),
-   `/silent /install` (WebView2).
+   Silent switches: `/S` (bit4id and VGCA TokenManager, both NSIS), `msiexec /qn /norestart /l*v`
+   (GCA01-Client), `/silent /install` (WebView2). TokenManager (legacy pre-2022 tokens) is detected by an
+   `eToken*` CSP under `HKLM\SOFTWARE\Microsoft\Cryptography\Defaults\Provider` or `System32\eTOKCSP.dll`.
 
    **The app also self-heals** (`Sip.Desktop/Program.cs`), which is what makes the `.zip` usable on a bare
    machine: `EnsureWebView2Runtime()` runs *synchronously before* the Photino window is created — without the

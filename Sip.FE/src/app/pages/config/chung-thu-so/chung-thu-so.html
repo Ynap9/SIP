@@ -1,11 +1,10 @@
 <div class="flex flex-col gap-4">
-  <!-- Chọn chứng thư số dùng để ký -->
   <div class="rounded-lg border border-slate-200 p-4">
     <div class="flex flex-wrap items-end justify-between gap-4">
       <div class="flex min-w-0 flex-1 flex-col gap-2">
         <label class="text-sm font-semibold text-slate-700">Chứng thư số dùng để ký</label>
         <p-select
-          [options]="rows()"
+          [options]="visibleRows()"
           [ngModel]="selectedThumbprint()"
           optionValue="thumbprint"
           placeholder="Chọn chứng thư số"
@@ -15,7 +14,6 @@
           class="w-full max-w-xl"
           (onChange)="onSelectCert($event.value)"
         >
-          <!-- Nhãn dòng: kèm badge nguồn + cảnh báo ngay trong danh sách để không phải chọn rồi mới biết -->
           <ng-template pTemplate="item" let-cert>
             <div class="flex w-full items-center justify-between gap-3">
               <div class="flex min-w-0 flex-col">
@@ -39,6 +37,13 @@
 
       <div class="flex items-center gap-2">
         <p-button
+          label="Chỉ hiện chứng thư ký được"
+          icon="pi pi-filter"
+          severity="secondary"
+          [outlined]="!onlySignable()"
+          (onClick)="toggleOnlySignable()"
+        />
+        <p-button
           label="Tải lại"
           icon="pi pi-refresh"
           severity="secondary"
@@ -49,7 +54,6 @@
       </div>
     </div>
 
-    <!-- CẢNH BÁO: cert đang chọn không dùng để ký được -->
     @if (hasInvalidSelection()) {
       <p-message severity="error" class="mt-4 block w-full">
         <div class="flex flex-col gap-1">
@@ -60,7 +64,6 @@
       </p-message>
     }
 
-    <!-- Thông tin chi tiết cert hợp lệ đang chọn -->
     @if (selectedCert(); as cert) {
       @if (cert.canSign) {
         <div class="mt-4 grid grid-cols-1 gap-x-8 gap-y-2 rounded-md bg-slate-50 p-4 text-sm md:grid-cols-2">
@@ -91,9 +94,21 @@
         </div>
       }
     }
+
+    <p class="mt-4 flex items-center gap-2 text-sm text-slate-500">
+      @if (verifying()) {
+        <i class="pi pi-spin pi-spinner"></i>
+        <span>Đang kiểm tra chứng thư số, vui lòng nhập PIN nếu được yêu cầu…</span>
+      } @else if (isVerified()) {
+        <i class="pi pi-check-circle text-green-600"></i>
+        <span>Chứng thư số đã sẵn sàng để ký.</span>
+      } @else {
+        <i class="pi pi-info-circle"></i>
+        <span>Chọn một chứng thư số “Ký được” để kiểm tra token và nhập PIN.</span>
+      }
+    </p>
   </div>
 
-  <!-- Tổng quan -->
   <div class="flex flex-wrap items-center gap-3 text-sm">
     <span class="rounded-md border border-slate-200 px-3 py-1.5">
       Tổng số: <span class="font-semibold">{{ rows().length }}</span>
@@ -106,24 +121,12 @@
     </span>
   </div>
 
-  <!-- Danh sách chứng thư số -->
   <app-data-table
-    tableKey="ky-so-cert"
+    tableKey="cau-hinh-chung-thu-so"
     [columns]="columns"
-    [data]="rows()"
+    [data]="visibleRows()"
     [loading]="tableLoading()"
     [hidePaginator]="true"
-    [pageSize]="rows().length"
+    [pageSize]="visibleRows().length"
   />
-
-  <!-- Chọn cert xong sẽ tự kiểm token (bật hộp PIN) rồi tự sang bước ký -->
-  <p class="flex items-center gap-2 text-sm text-slate-500">
-    @if (verifying()) {
-      <i class="pi pi-spin pi-spinner"></i>
-      <span>Đang kiểm tra chứng thư số, vui lòng nhập PIN nếu được yêu cầu…</span>
-    } @else {
-      <i class="pi pi-info-circle"></i>
-      <span>Chọn một chứng thư số “Ký được” để kiểm tra và chuyển sang bước ký.</span>
-    }
-  </p>
 </div>

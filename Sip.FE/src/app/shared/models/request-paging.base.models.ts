@@ -19,7 +19,7 @@ export type IBaseResponsePaging<T> = IBaseResponse & {
 }
 
 export type IBaseResponsePagingData<T> = {
-  custommData: any
+  customData: any
   items: T[]
   totalItems: number
 }

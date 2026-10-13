@@ -22,7 +22,6 @@ namespace Sip.be.Application.Document.Dtos.Sign
         /// <summary>Verdict cấp file.</summary>
         public PdfFormatVerdict Verdict { get; set; }
 
-        /// <summary>File này có ký được không (chỉ true khi Verdict = Valid).</summary>
         public bool CanSign { get; set; }
 
         /// <summary>Thông điệp tiếng Việt hiển thị cho người dùng (ok hoặc lý do chặn).</summary>
@@ -41,13 +40,12 @@ namespace Sip.be.Application.Document.Dtos.Sign
         /// <summary>Tổng số file đã kiểm.</summary>
         public int TotalFiles { get; set; }
 
-        /// <summary>Số file ký được (Valid).</summary>
         public int ValidCount { get; set; }
 
-        /// <summary>Số file KHÔNG ký được (mọi verdict khác Valid).</summary>
+        /// <summary>Số file KHÔNG ký được — đếm theo CanSign = false.</summary>
         public int InvalidCount { get; set; }
 
-        /// <summary>True khi mọi file đều Valid -> cả lô được phép sang bước ký.</summary>
+        /// <summary>True khi mọi file đều ký được -> cả lô được phép sang bước ký.</summary>
         public bool AllValid => InvalidCount == 0;
     }
 

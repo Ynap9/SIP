@@ -1,3 +1,5 @@
+using Sip.be.External.Documents.Dtos;
+
 namespace Sip.be.Application.Document.Dtos.Sign
 {
     /// <summary>
@@ -34,5 +36,7 @@ namespace Sip.be.Application.Document.Dtos.Sign
 
         /// <summary>Chiều cao khối chữ ký, theo tỉ lệ chiều cao trang.</summary>
         public double HeightRatio { get; set; }
+
+        public PdfSignPlacementKind Kind { get; set; }
     }
 }

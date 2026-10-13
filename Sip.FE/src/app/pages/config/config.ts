@@ -1,79 +1,58 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, OnInit, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { MenuItem } from 'primeng/api';
-import { SharedImports } from '../../shared/import.shared';
-import { BaseComponent } from '../../shared/components/base/base-component';
+import { SelectButtonModule } from 'primeng/selectbutton';
+import { filter } from 'rxjs';
+
 import { Breadcrumb } from '../../shared/components/breadcrumb/breadcrumb';
-import { DataTable } from '../../shared/components/data-table/data-table';
-import { IColumn } from '../../shared/models/data-table.models';
-import { CellViewTypes } from '../../shared/constants/data-table.constants';
-import { ConfigService } from '../../services/config.service';
-import { IConfigItem } from '../../models/config.models';
+
+const CONFIG_TAB_DEFAULT = 'ho-so-van-ban';
 
 @Component({
   selector: 'app-config',
-  imports: [...SharedImports, Breadcrumb, DataTable],
+  imports: [FormsModule, RouterOutlet, SelectButtonModule, Breadcrumb],
   templateUrl: './config.html',
   styleUrl: './config.scss'
 })
-export class Config extends BaseComponent implements OnInit {
-  private configService = inject(ConfigService);
+export class Config implements OnInit {
+  private router = inject(Router);
+  private route = inject(ActivatedRoute);
 
   home: MenuItem = { icon: 'pi pi-home', routerLink: '/' };
   breadcrumbItems: MenuItem[] = [{ label: 'Cấu hình' }];
 
-  options = [
-    { label: 'Hồ sơ', value: 'ho-so' },
-    { label: 'Văn bản', value: 'van-ban' }
+  tabOptions = [
+    { label: 'Hồ sơ / Văn bản', value: CONFIG_TAB_DEFAULT },
+    { label: 'Chứng thư số', value: 'chung-thu-so' },
+    { label: 'Template chữ ký', value: 'template-chu-ky' }
   ];
+  tab = signal<string>(CONFIG_TAB_DEFAULT);
 
-  selected = signal<string | null>(null);
-  rows = signal<IConfigItem[]>([]);
-  tableLoading = signal<boolean>(false);
-
-  columns: IColumn[] = [
-    { header: 'STT', cellViewType: CellViewTypes.INDEX },
-    { header: 'Trường thông tin', field: 'truongThongTin' },
-    { header: 'Mô tả', field: 'moTa', cellClass: 'cell-pre-line' },
-    { header: 'Bắt buộc', field: 'batBuoc', cellViewType: CellViewTypes.BOOL_CHECK }
-  ];
-
-  override ngOnInit(): void {
-    this.selected.set('ho-so');
-    this.onSelect();
+  constructor() {
+    this.router.events
+      .pipe(
+        filter((event) => event instanceof NavigationEnd),
+        takeUntilDestroyed()
+      )
+      .subscribe(() => this.syncTab());
   }
 
-  onSelect(): void {
-    const value = this.selected();
-    if (!value) {
-      this.rows.set([]);
+  ngOnInit(): void {
+    this.syncTab();
+  }
+
+  onTabChange(value: string): void {
+    this.router.navigate([value], { relativeTo: this.route });
+  }
+
+  private syncTab(): void {
+    const path = this.route.firstChild?.snapshot.url[0]?.path;
+    if (!path) {
+      this.router.navigate([CONFIG_TAB_DEFAULT], { relativeTo: this.route, replaceUrl: true });
       return;
     }
-
-    this.tableLoading.set(true);
-    const request$ =
-      value === 'ho-so'
-        ? this.configService.getConfigHoSo()
-        : this.configService.getConfigVanBan();
-
-    request$.subscribe({
-      next: (res) => {
-        if (this.isResponseSucceed(res)) {
-          // BE trả "\n" dạng ký tự literal -> đổi sang xuống dòng thật để hiển thị đúng
-          const data = (res.data ?? []).map((item) => ({
-            ...item,
-            moTa: (item.moTa ?? '').replace(/\\r\\n|\\n|\\r/g, '\n')
-          }));
-          this.rows.set(data);
-        } else {
-          this.rows.set([]);
-        }
-        this.tableLoading.set(false);
-      },
-      error: () => {
-        this.messageError('Không thể tải dữ liệu cấu hình. Vui lòng thử lại sau.');
-        this.rows.set([]);
-        this.tableLoading.set(false);
-      }
-    });
+    this.tab.set(path);
   }
 }

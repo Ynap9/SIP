@@ -1,0 +1,56 @@
+<div class="flex flex-col gap-4">
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div class="flex flex-col">
+      <h2 class="text-lg font-semibold text-slate-800">Template chữ ký</h2>
+      <span class="text-sm text-slate-500">{{ total() }} template · bộ cấu hình chữ ký dùng chung</span>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <p-iconfield>
+        <p-inputicon styleClass="pi pi-search" />
+        <input
+          pInputText
+          type="text"
+          placeholder="Tìm theo tên template"
+          [ngModel]="keyword()"
+          (ngModelChange)="keyword.set($event)"
+          (keyup.enter)="onSearch()"
+        />
+      </p-iconfield>
+      @if (searchedKeyword()) {
+        <p-button icon="pi pi-times" severity="secondary" [text]="true" pTooltip="Bỏ tìm kiếm" (onClick)="onClearSearch()" />
+      }
+      <p-button label="Thêm template" icon="pi pi-plus" (onClick)="onCreate()" />
+    </div>
+  </div>
+
+  @if (!tableLoading() && total() === 0) {
+    <div class="flex flex-col items-center gap-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center">
+      <i class="pi text-4xl text-slate-400" [ngClass]="searchedKeyword() ? 'pi-search' : 'pi-file-edit'"></i>
+      @if (searchedKeyword()) {
+        <h3 class="text-base font-semibold text-slate-700">Không tìm thấy template nào</h3>
+        <p class="text-sm text-slate-500">Không có template nào khớp với "{{ searchedKeyword() }}".</p>
+        <p-button label="Bỏ tìm kiếm" icon="pi pi-times" severity="secondary" [outlined]="true" (onClick)="onClearSearch()" />
+      } @else {
+        <h3 class="text-base font-semibold text-slate-700">Chưa có template nào</h3>
+        <p class="max-w-xl text-sm text-slate-500">
+          Template là bộ cấu hình chữ ký dựng sẵn — chứng thư số, dấu đỏ, chữ ký tươi và vị trí từng khối — để không
+          phải đặt lại mỗi lần ký.
+        </p>
+        <p-button label="Thêm template đầu tiên" icon="pi pi-plus" (onClick)="onCreate()" />
+      }
+    </div>
+  } @else {
+    <app-data-table
+      tableKey="cau-hinh-template-chu-ky"
+      [columns]="columns"
+      [data]="rows()"
+      [loading]="tableLoading()"
+      [pageSize]="MAX_PAGE_SIZE"
+      [pageNumber]="pageNumber()"
+      [total]="total()"
+      (onPageChanged)="onPageChanged($event)"
+      (onCustomComp)="onTableAction($event)"
+    />
+  }
+</div>

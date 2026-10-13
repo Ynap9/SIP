@@ -81,5 +81,15 @@ namespace Sip.be.Shared.Request.ErrorRequest
 
         //Vị trí đặt chữ ký người dùng chọn không dùng được (thiếu tọa độ / sai trang / tràn ra ngoài trang)
         public const int SignPositionInvalid = 1037;
+
+        //Các mã lỗi cho luồng TEMPLATE CẤU HÌNH CHỮ KÝ
+        //Không tìm thấy template theo Id (đã bị xoá hoặc Id sai)
+        public const int SignTemplateNotFound = 1038;
+        //Tên template bị trùng với template khác trên cùng máy
+        public const int SignTemplateNameDuplicated = 1039;
+        //Ảnh dấu đỏ / chữ ký tươi không dùng được (không tồn tại / sai đuôi / quá lớn)
+        public const int SignTemplateImageInvalid = 1040;
+        //Thiếu file PDF mẫu đi kèm app (bản cài bị thiếu file, không phải lỗi thao tác của người dùng)
+        public const int SignTemplateSampleMissing = 1041;
     }
 }

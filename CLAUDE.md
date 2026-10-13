@@ -8,9 +8,9 @@ Do not start work until you have read and understood the docs relevant to your t
 1. **This file** — repo map, golden rules, build/run.
 2. **Backend architecture** → [`.claude/be/architecture/`](.claude/be/architecture/) (README + numbered files: controllers, services, DTOs, domain, infra, shared, conventions).
 3. **Frontend architecture** → [`.claude/fe/architecture/`](.claude/fe/architecture/) (README + pages, services, shared, layout, conventions).
-4. **Frontend structure/UI/patterns** → [`.claude/fe/docs/`](.claude/fe/docs/): `project-structure.md`, `ui-guidelines.md`, `sakai-layout.md`, `skills/` (`feature-page`, `dialog-action`, `sakai-layout`), `plans/`.
+4. **Frontend structure/UI/patterns** → [`.claude/fe/docs/`](.claude/fe/docs/): `project-structure.md` → `shared-and-conventions.md` → `backend-integration.md` (3 parts), plus `ui-guidelines.md`, `sakai-layout.md`, `skills/` (`feature-page`, `dialog-action`, `sakai-layout`), `plans/`.
 5. **Domain standard** → [`docs/chuan-dong-goi-sip-tt05.md`](docs/chuan-dong-goi-sip-tt05.md) — the TT05/2025/TT-BNV SIP packaging spec **and** how the real sample package deviates from it (§8). The **real package is the source of truth**, not the raw TT05 tables.
-6. **DB design** → [`docs/thiet-ke-db-dong-goi-sip.md`](docs/thiet-ke-db-dong-goi-sip.md) — proposed `HoSo`/`TaiLieu`/`DanhMuc` schema. **Proposal only — not yet implemented.** Today only `ConfigHoSo`/`ConfigVanBan` exist in the DB.
+6. **DB design** → [`docs/thiet-ke-db-dong-goi-sip.md`](docs/thiet-ke-db-dong-goi-sip.md) — proposed `HoSo`/`TaiLieu`/`DanhMuc` schema. **Proposal only — not yet implemented.** The app persists exactly four tables, in **two** SQLite files under `%AppData%\SipPack`: `sip.db` (`ConfigHoSo`, `ConfigVanBan`) and `sign-templates.db` (`SignTemplate`, `SignTemplatePosition`).
 
 When your change alters a pattern any of these documents describe, **update that document** in the same task.
 
@@ -37,7 +37,8 @@ docs/        Domain/standard docs (TT05 spec, DB design, desktop packaging plan)
 - **Check** — validate one record folder in 3 stages, **streamed realtime over SSE** (`pages/dong-goi/check`); **multi** validates a parent folder of many hồ sơ (`pages/dong-goi/multi`).
 - **Pack** — build a SIP package (EAD.xml + METS.xml + ZIP); **nothing persisted to DB** (`pages/dong-goi`); **multi** packs a parent folder (SSE).
 - **Unpack** — reverse a SIP `.zip`/folder back into a hồ sơ folder + Excel (`pages/boc-tach`).
-- **Sign** — pick a certificate (incl. USB token), gate PDF/A, sign a folder with a Ban Cơ yếu RFC 3161 timestamp, SSE per file (`pages/ky-so`).
+- **Sign** — pick folder + sign template + certificate (PIN check), check PDF/A (warning only — only non-PDF/unreadable files are skipped), sign a folder with a Ban Cơ yếu RFC 3161 timestamp, SSE per file (`pages/ky-so`, single page; certificate list and template editing live under `/cau-hinh`).
+- **Sign template** — reusable signing presets in `sign-templates.db` (`template-chu-ky/*`), edited at `/cau-hinh/template-chu-ky`. Seal / wet-signature images are picked from the machine and stamped on the PDF when signing — see `.claude/contracts/sign-template.contract.md`.
 
 Multi + Unpack rules: [`docs/multi-unpack-flows.md`](docs/multi-unpack-flows.md). Signature/timestamp: [`docs/verify-signature-timestamp.md`](docs/verify-signature-timestamp.md).
 

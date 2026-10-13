@@ -47,4 +47,11 @@ export class Home {
     { no: 3, title: 'Kiểm tra hồ sơ', desc: 'Đối chiếu cấu trúc thư mục, mã định danh và nội dung theo TT05.' },
     { no: 4, title: 'Đóng gói SIP', desc: 'Sinh METS.xml + EAD.xml và nén thành gói SIP nộp lưu.' }
   ];
+
+  protected readonly standards = [
+    { icon: 'pi pi-book', title: 'TT05/2025/TT-BNV', desc: 'Chuẩn gói tin nộp lưu' },
+    { icon: 'pi pi-sitemap', title: 'E-ARK CSIP', desc: 'METS + EAD' },
+    { icon: 'pi pi-file-pdf', title: 'PDF/A', desc: 'Kiểm định dạng hai lớp' },
+    { icon: 'pi pi-shield', title: 'Ban Cơ yếu Chính phủ', desc: 'Chữ ký số + dấu thời gian' }
+  ];
 }

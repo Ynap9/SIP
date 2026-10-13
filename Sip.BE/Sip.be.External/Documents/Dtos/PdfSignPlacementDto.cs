@@ -34,5 +34,7 @@ namespace Sip.be.External.Documents.Dtos
 
         /// <summary>Chiều cao khối chữ ký, tính bằng tỉ lệ chiều cao trang.</summary>
         public double HeightRatio { get; set; }
+
+        public PdfSignPlacementKind Kind { get; set; }
     }
 }

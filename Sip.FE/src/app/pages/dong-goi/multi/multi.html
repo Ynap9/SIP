@@ -1,4 +1,4 @@
-<div class="flex flex-col gap-4">
+<div class="flex min-h-0 flex-1 flex-col gap-4">
   <!-- 1. Khu vực đưa thư mục CHA vào -->
   <div
     class="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed py-12 transition-colors"
@@ -46,8 +46,10 @@
     <p-progressbar [value]="percent()" />
   }
 
+  <!-- Khung cao đúng phần còn lại của trang và tự cuộn (cả dọc lẫn ngang): danh sách hồ sơ dài bao nhiêu
+       cũng không đẩy nút thao tác xuống khỏi màn hình. -->
   @if (hoSoRows().length) {
-    <div class="overflow-x-auto rounded-lg border border-slate-200">
+    <div class="table-frame-scroll rounded-lg border border-slate-200">
       <table class="grid-table" style="min-width: 50rem">
         <thead>
           <tr>
@@ -108,8 +110,11 @@
             <!-- Dòng mở rộng: bảng con các file trong hồ sơ -->
             @if (isExpanded(row.name)) {
               <tr>
+                <!-- Bảng con có vùng cuộn RIÊNG: mở một hồ sơ vài trăm file cũng chỉ chiếm tối đa chiều cao
+                     của .row-expand-scroll, không đẩy bảng hồ sơ dài ra rồi cướp chỗ của các dòng khác. -->
                 <td colspan="6" style="padding: 0" class="bg-slate-50">
                   @if (row.files.length) {
+                  <div class="row-expand-scroll">
                     <table class="grid-table child">
                       <thead>
                         <tr>
@@ -227,6 +232,7 @@
                         }
                       </tbody>
                     </table>
+                  </div>
                   } @else {
                     <div class="p-3 text-center text-sm text-slate-500">Không có file để hiển thị.</div>
                   }

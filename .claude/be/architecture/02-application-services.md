@@ -10,13 +10,15 @@ Sip.be.Application/
 │   └── MappingProfile.cs     # AutoMapper profile (see 03-dtos-mapping.md)
 └── Document/
     ├── Interfaces/           # CHỈ service của Application: IConfigService, ICheckService, IPackService,
-    │                         #   IUnpackService, ISignService
-    ├── Implements/           # ConfigService, CheckService, PackService, UnpackService, SignService
-    └── Dtos/                 # Check/, Config/, Pack/, Unpack/, Sign/ — DTO của WIRE (API), 1 type 1 file
+    │                         #   IUnpackService, ISignService, ISignTemplateService
+    ├── Implements/           # ConfigService, CheckService, PackService, UnpackService, SignService,
+    │                         #   SignTemplateService
+    └── Dtos/                 # Check/, Config/, Pack/, Unpack/, Sign/, SignTemplate/ — DTO của WIRE (API),
+                              #   1 type 1 file
 ```
 Contracts của `Sip.be.External` (`IPdfSignatureReader`, `ISignatureVerifier`, `IPdfFormatInspector`,
-`ICertificateProvider`, `ISigningKey`, `ITimestampClient`, `IPdfSigner`, `ISignaturePlacementResolver`) **và DTO của
-chúng** nằm trong chính `Sip.be.External/Documents/{Interfaces,Dtos}` — Application chỉ `using` rồi gọi, **không**
+`ICertificateProvider`, `ISigningKey`, `ITimestampClient`, `IPdfSigner`, `ISignaturePlacementResolver`,
+`IPdfPageInspector`) **và DTO của chúng** nằm trong chính `Sip.be.External/Documents/{Interfaces,Dtos}` — Application chỉ `using` rồi gọi, **không**
 khai lại. Service ánh xạ DTO wire → DTO External ở biên (vd `SignRequestDto` → `PdfSignOptionsDto`).
 
 ## Interface convention
@@ -43,6 +45,10 @@ public class BaseService {
 ```
 Every service gets DbContext + logger + AutoMapper for free. Don't re-inject these in the child.
 
+> **Exception:** `SignTemplateService` deliberately does **not** extend `BaseService`, because `BaseService` hard-wires
+> `SipDbContext` and that feature lives in a **separate** database (`SignTemplateDbContext`, see
+> [05-infrastructure.md](05-infrastructure.md)). It injects `SignTemplateDbContext` + `ILogger` + `IMapper` itself.
+
 ## Dependency Injection (registered in `Program.cs`)
 ```csharp
 builder.Services.AddScoped<IConfigService, ConfigService>();
@@ -50,6 +56,7 @@ builder.Services.AddScoped<ICheckService, CheckService>();
 builder.Services.AddScoped<IPackService, PackService>();
 builder.Services.AddScoped<IUnpackService, UnpackService>();
 builder.Services.AddScoped<ISignService, SignService>();
+builder.Services.AddScoped<ISignTemplateService, SignTemplateService>();
 // implementations from Sip.be.External
 builder.Services.AddScoped<IPdfSignatureReader, PdfSignatureReader>();
 builder.Services.AddScoped<ISignatureVerifier, SignatureVerifier>();
@@ -59,6 +66,7 @@ builder.Services.AddScoped<ISigningKey, StoreSigningKey>();      // Scoped: cach
 builder.Services.AddScoped<ITimestampClient, TimestampClient>();
 builder.Services.AddScoped<IPdfSigner, PdfSigner>();
 builder.Services.AddScoped<ISignaturePlacementResolver, SignaturePlacementResolver>();
+builder.Services.AddScoped<IPdfPageInspector, PdfPageInspector>();
 ```
 All services are **Scoped**. When adding a feature: create the interface + impl, then register the pair here.
 
@@ -71,3 +79,4 @@ All services are **Scoped**. When adding a feature: create the interface + impl,
   - **Multi handles all 3 structures like CheckService** — `PackMultiFolderAsync` calls `ResolveSharedExcelPath(parent)`: `null` → loại 1 (per-hồ-sơ `metadata/`+`attachment/`, via `PackOneHoSo`); else loại 2/3 → `PackMultiSharedExcelAsync` (shared Excel parsed once, sliced per hồ sơ, data files taken directly from each folder, via `PackOneHoSoShared` + `BuildSimpleDcFromCells`). Single pack (`PackHoSoFolderAsync`) is loại 1 only. See [pack-multi gap bug](../../../docs/bug/pack-multi-missing-shared-excel-structure.md).
 - **UnpackService** — reverses a SIP `.zip` **or** package folder into `{output}/{fileCode}/` with `Metadata/` + `Attachment/` (capitalised on purpose) + a rebuilt `{fileCode}.xlsx`; returns the file tree. Needs config rows for the Excel headers (`ErrorCodes.ConfigEmpty`). **No DB writes.**
 - **SignService** — certificate listing, token pre-flight, PDF preview navigation (`GetPreviewAt`/`OpenPdfForPreview`), PDF/A gate and folder signing (SSE). Validates the signature position **once per batch** (ratios 0..1, `ErrorCodes.SignPositionInvalid`) and maps `SignRequestDto` → `PdfSignOptionsDto`; the chosen position + page count apply to **every file in the folder**. Delegates all crypto/PDF work to the `Sip.be.External` contracts above; **never touches `_sipDbContext`**. Details: [../../../docs/verify-signature-timestamp.md](../../../docs/verify-signature-timestamp.md), [../plans/pdf-signing-be.plan.md](../plans/pdf-signing-be.plan.md).
+- **SignTemplateService** — CRUD + paging of signing presets on `SignTemplateDbContext`. Stamp / wet-signature images are **copied** into `%AppData%\SipPack\template-assets\{id}\` rather than referenced in place, so renaming or deleting the source file cannot silently break a template. `PUT` replaces the whole row **including `positions`**; delete is soft-delete plus asset-folder cleanup. Images: `.png/.jpg/.jpeg`, ≤ 5 MB (`SignTemplateConstants`). Contract: [../../contracts/sign-template.contract.md](../../contracts/sign-template.contract.md).

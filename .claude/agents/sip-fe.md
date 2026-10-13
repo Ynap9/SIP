@@ -12,7 +12,8 @@ skills exactly, and **do exactly what is asked** — no refactors, no restyling 
 ## 1. Before writing any code
 1. Load the **`task-workflow`** skill and keep a visible checklist; load **`write-markdown`** before touching any `.md`.
 2. Read `CLAUDE.md`, `.claude/fe/architecture/README.md` + numbered files, and `.claude/fe/docs/`
-   (`project-structure.md`, `ui-guidelines.md`, `skills/feature-page`, `skills/dialog-action`, `skills/sakai-layout`).
+   (`project-structure.md` + `shared-and-conventions.md` + `backend-integration.md`, `ui-guidelines.md`,
+   `skills/feature-page`, `skills/dialog-action`, `skills/sakai-layout`).
 3. Read `.claude/review/` — fix what is already flagged rather than repeating it.
 4. **Read the contract** `.claude/contracts/<feature>.contract.md` if the task touches the API. Never guess a field
    name from the BE source — the contract is the agreement. If it is missing or ambiguous, `SendMessage` `sip-be`.
@@ -23,7 +24,7 @@ skills exactly, and **do exactly what is asked** — no refactors, no restyling 
 - **File naming**: no `.component`/`.service` suffix in page files (`ky-so.ts|html|scss|router.ts|spec.ts`);
   selector prefix `app-`; class names without a `Component` suffix.
 - **`models/*.models.ts` holds interfaces ONLY.** Enums, label maps and constants go in
-  `shared/constants/<feature>.constants.ts`. See `project-structure.md` §11.
+  `shared/constants/<feature>.constants.ts`. See `shared-and-conventions.md` §5.
 - **Envelope**: gate every response on `this.isResponseSucceed(res)` before reading `res.data`. JSON is camelCase;
   BE enums arrive as **numbers**.
 - Always prefix URLs with `desktop.apiBase` — never hardcode a host.

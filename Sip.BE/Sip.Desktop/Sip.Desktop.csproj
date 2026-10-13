@@ -9,10 +9,15 @@
     <AssemblyName>SIPPACK</AssemblyName>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <Platforms>x64</Platforms>
-    <Version>2.2.0</Version>
-    <FileVersion>2.2.0.0</FileVersion>
-    <AssemblyVersion>2.2.0.0</AssemblyVersion>
+    <Version>2.3.0</Version>
+    <FileVersion>2.3.0.0</FileVersion>
+    <AssemblyVersion>2.3.0.0</AssemblyVersion>
+    <ApplicationIcon>Assets\sippack.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="Assets\sippack.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+  </ItemGroup>
 
   <!-- Cần shared framework ASP.NET Core để dùng WebApplication/IServer (host Kestrel in-process) -->
   <ItemGroup>

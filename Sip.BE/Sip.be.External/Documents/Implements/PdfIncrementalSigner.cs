@@ -49,6 +49,11 @@ namespace Sip.be.External.Documents.Implements
             DateTime signedAt,
             int signatureSizeBytes,
             IReadOnlyList<PdfSignPlacementDto>? placements,
+            string fontFamily,
+            double fontSize,
+            string textColor,
+            byte[]? sealImage,
+            byte[]? wetSignatureImage,
             ISignaturePlacementResolver placementResolver,
             Func<byte[], CancellationToken, Task<byte[]>> computeSignature,
             CancellationToken cancellationToken = default)
@@ -117,12 +122,20 @@ namespace Sip.be.External.Documents.Implements
 
             // Mỗi trang tính lại khổ riêng: trong cùng một file vẫn có thể có trang ngang xen trang dọc, nên
             // tỉ lệ phải quy đổi theo /MediaBox của CHÍNH trang đó thì chữ ký mới nằm đúng chỗ trên mọi trang.
-            var widgets = new List<(int PageNo, string PageRaw, PdfRectDto Rect, AppearanceResult Appearance, int WidgetNo)>();
-            // Khối chữ ký KHÔNG ghi phần bù múi giờ: giờ vẽ ra luôn là giờ VN (signedAt lấy từ VietnamNow), nên
-            // "+07:00" chỉ làm khối dài thêm mà không nói thêm được gì cho người đọc trong nước.
+            var signatureBlocks = new List<(int PageNo, string PageRaw, PdfRectDto Rect, AppearanceResult? Appearance)>();
+            var stampBlocks = new List<(int PageNo, string PageRaw, PdfRectDto Rect, AppearanceResult Appearance)>();
             var signedAtText = signedAt.ToString(SigningConstants.AppearanceTimeFormat, CultureInfo.InvariantCulture);
             foreach (var placement in placementList)
             {
+                var kind = placement?.Kind ?? PdfSignPlacementKind.Signature;
+                var image = kind switch
+                {
+                    PdfSignPlacementKind.Seal => sealImage,
+                    PdfSignPlacementKind.WetSignature => wetSignatureImage,
+                    _ => null
+                };
+                if (kind != PdfSignPlacementKind.Signature && (image == null || image.Length == 0)) continue;
+
                 // Trang của chính khối này. File ÍT TRANG HƠN -> kẹp về trang cuối, TUYỆT ĐỐI không báo lỗi:
                 // người dùng đặt vị trí một lần cho cả thư mục, đánh trượt một file chỉ vì nó ngắn hơn là hỏng
                 // cả lô vì một con số không liên quan tới file đó.
@@ -154,21 +167,41 @@ namespace Sip.be.External.Documents.Implements
                     Height = Math.Abs(box[3] - box[1])
                 };
 
-                // Toàn bộ phép quy đổi tỉ lệ -> point và co giãn khối chữ ký nằm ở resolver, chạy LẠI cho
-                // từng trang của từng file: một lựa chọn của người dùng ra ô đúng khổ trên mọi khổ giấy.
-                var rect = placementResolver.Resolve(pageBox, placement);
+                if (kind == PdfSignPlacementKind.Signature)
+                {
+                    var pageFontSize = fontSize * Math.Min(
+                        pageBox.Width / SigningConstants.AppearanceReferencePageWidth,
+                        pageBox.Height / SigningConstants.AppearanceReferencePageHeight);
+                    var textSize = PdfAppearanceBuilder.MeasureText(signerName, signedAtText, fontFamily, pageFontSize);
+                    var rect = placementResolver.Resolve(pageBox, placement, textSize.Width, textSize.Height);
 
-                // Khối chữ ký hiển thị + cây font đi kèm, vẽ ĐÚNG khổ ô vừa tính (chữ co giãn theo, không bị
-                // hộp một đằng chữ một nẻo). Mỗi ô một khối riêng vì BBox phải khớp đúng ô đó.
-                var appearance = PdfAppearanceBuilder.Build(signerName, signedAtText, nextNumber,
-                    rect.Width, rect.Height);
-                nextNumber = appearance.Objects.Max(o => o.Number) + 1;
-
-                // Đúng MỘT ô trong cả file -> giữ NGUYÊN hình dạng của file production (field gộp widget,
-                // đúng một object). Nhiều ô -> mỗi ô một widget con của cùng một field.
-                var widgetNo = placementList.Count == 1 ? sigFieldNo : nextNumber++;
-                widgets.Add((no, raw, rect, appearance, widgetNo));
+                    var appearance = PdfAppearanceBuilder.Build(signerName, signedAtText, nextNumber,
+                        rect.Width, rect.Height, fontFamily, pageFontSize, textColor);
+                    nextNumber = appearance.Objects.Max(o => o.Number) + 1;
+                    signatureBlocks.Add((no, raw, rect, appearance));
+                }
+                else
+                {
+                    var rect = placementResolver.Resolve(pageBox, placement,
+                        placement!.WidthRatio * pageBox.Width, placement.HeightRatio * pageBox.Height);
+                    var appearance = PdfAppearanceBuilder.BuildImage(image!, nextNumber, rect.Width, rect.Height);
+                    nextNumber = appearance.Objects.Max(o => o.Number) + 1;
+                    stampBlocks.Add((no, raw, rect, appearance));
+                }
             }
+
+            if (signatureBlocks.Count == 0)
+            {
+                var firstPageRaw = info.GetObjectBody(pageOrder[0])
+                    ?? throw new UserFriendlyException(ErrorCodes.SignPdfStructureUnsupported,
+                        "Không đọc được trang 1 của file PDF.");
+                signatureBlocks.Add((pageOrder[0], firstPageRaw, new PdfRectDto(), null));
+            }
+
+            // Đúng MỘT ô trong cả file -> giữ NGUYÊN hình dạng của file production (field gộp widget,
+            // đúng một object). Nhiều ô -> mỗi ô một widget con của cùng một field.
+            var widgetNos = signatureBlocks.Select(_ => signatureBlocks.Count == 1 ? sigFieldNo : nextNumber++).ToList();
+            var stampNos = stampBlocks.Select(_ => nextNumber++).ToList();
 
             var xrefNo = nextNumber++;
 
@@ -177,12 +210,15 @@ namespace Sip.be.External.Documents.Implements
 
             // Gom theo TRANG: một trang có bao nhiêu ô thì /Annots của nó nhận bấy nhiêu widget, và phải nối
             // dồn vào cùng một bản dict — ghi đè trang hai lần thì lần sau xoá mất widget của lần trước.
-            var newPages = widgets.GroupBy(w => w.PageNo).Select(g =>
+            var annotations = signatureBlocks.Select((b, i) => (b.PageNo, b.PageRaw, AnnotNo: widgetNos[i]))
+                .Concat(stampBlocks.Select((b, i) => (b.PageNo, b.PageRaw, AnnotNo: stampNos[i])))
+                .ToList();
+            var newPages = annotations.GroupBy(a => a.PageNo).Select(g =>
             {
                 var body = g.First().PageRaw;
-                foreach (var w in g)
+                foreach (var a in g)
                 {
-                    body = PdfObjectWriter.AppendToArray(body, "Annots", w.WidgetNo)
+                    body = PdfObjectWriter.AppendToArray(body, "Annots", a.AnnotNo)
                         ?? throw new UserFriendlyException(ErrorCodes.SignPdfStructureUnsupported,
                             "/Annots của trang là tham chiếu gián tiếp — dạng này chưa hỗ trợ ký nối bản.");
                 }
@@ -217,12 +253,12 @@ namespace Sip.be.External.Documents.Implements
             foreach (var p in newPages) WriteRaw(p.PageNo, p.Body, null);
 
             var fieldSb = new StringBuilder();
-            if (widgets.Count == 1)
+            if (signatureBlocks.Count == 1)
             {
                 // Field chữ ký gộp widget: /FT/Sig + /Subtype/Widget trên cùng một object là cách chuẩn và
                 // cũng là cách file production thật làm (chỉ có MỘT object 44 nằm trong cả /Fields lẫn /Annots).
-                var only = widgets[0];
-                PdfObjectWriter.WriteValue(fieldSb, new PdfObjectWriter.Dict()
+                var only = signatureBlocks[0];
+                var fieldDict = new PdfObjectWriter.Dict()
                     .Add("Type", new PdfObjectWriter.Name("Annot"))
                     .Add("Subtype", new PdfObjectWriter.Name("Widget"))
                     .Add("FT", new PdfObjectWriter.Name("Sig"))
@@ -233,9 +269,13 @@ namespace Sip.be.External.Documents.Implements
                     .Add("V", new PdfObjectWriter.Ref(sigValueNo))
                     .Add("P", new PdfObjectWriter.Ref(only.PageNo))
                     .Add("F", 4) // cờ Print: chữ ký phải hiện khi in
-                    .Add("Rect", new object[] { only.Rect.X, only.Rect.Y, only.Rect.Right, only.Rect.Top })
-                    .Add("AP", new PdfObjectWriter.Dict()
-                        .Add("N", new PdfObjectWriter.Ref(only.Appearance.FormObjectNumber))));
+                    .Add("Rect", new object[] { only.Rect.X, only.Rect.Y, only.Rect.Right, only.Rect.Top });
+                if (only.Appearance != null)
+                {
+                    fieldDict.Add("AP", new PdfObjectWriter.Dict()
+                        .Add("N", new PdfObjectWriter.Ref(only.Appearance.FormObjectNumber)));
+                }
+                PdfObjectWriter.WriteValue(fieldSb, fieldDict);
                 WriteRaw(sigFieldNo, fieldSb.ToString(), null);
             }
             else
@@ -248,28 +288,53 @@ namespace Sip.be.External.Documents.Implements
                     .Add("Ff", 0)
                     .Add("T", new PdfObjectWriter.Str("SIPPACK_Signature_" + sigFieldNo))
                     .Add("V", new PdfObjectWriter.Ref(sigValueNo))
-                    .Add("Kids", widgets.Select(w => new PdfObjectWriter.Ref(w.WidgetNo)).ToArray()));
+                    .Add("Kids", widgetNos.Select(n => new PdfObjectWriter.Ref(n)).ToArray()));
                 WriteRaw(sigFieldNo, fieldSb.ToString(), null);
 
-                foreach (var p in widgets)
+                for (var i = 0; i < signatureBlocks.Count; i++)
                 {
-                    var widgetSb = new StringBuilder();
-                    PdfObjectWriter.WriteValue(widgetSb, new PdfObjectWriter.Dict()
+                    var p = signatureBlocks[i];
+                    var widgetDict = new PdfObjectWriter.Dict()
                         .Add("Type", new PdfObjectWriter.Name("Annot"))
                         .Add("Subtype", new PdfObjectWriter.Name("Widget"))
                         .Add("Parent", new PdfObjectWriter.Ref(sigFieldNo))
                         .Add("P", new PdfObjectWriter.Ref(p.PageNo))
                         .Add("F", 4)
-                        .Add("Rect", new object[] { p.Rect.X, p.Rect.Y, p.Rect.Right, p.Rect.Top })
-                        .Add("AP", new PdfObjectWriter.Dict()
-                            .Add("N", new PdfObjectWriter.Ref(p.Appearance.FormObjectNumber))));
-                    WriteRaw(p.WidgetNo, widgetSb.ToString(), null);
+                        .Add("Rect", new object[] { p.Rect.X, p.Rect.Y, p.Rect.Right, p.Rect.Top });
+                    if (p.Appearance != null)
+                    {
+                        widgetDict.Add("AP", new PdfObjectWriter.Dict()
+                            .Add("N", new PdfObjectWriter.Ref(p.Appearance.FormObjectNumber)));
+                    }
+                    var widgetSb = new StringBuilder();
+                    PdfObjectWriter.WriteValue(widgetSb, widgetDict);
+                    WriteRaw(widgetNos[i], widgetSb.ToString(), null);
                 }
             }
 
-            foreach (var p in widgets)
+            for (var i = 0; i < stampBlocks.Count; i++)
             {
+                var s = stampBlocks[i];
+                var stampSb = new StringBuilder();
+                PdfObjectWriter.WriteValue(stampSb, new PdfObjectWriter.Dict()
+                    .Add("Type", new PdfObjectWriter.Name("Annot"))
+                    .Add("Subtype", new PdfObjectWriter.Name("Stamp"))
+                    .Add("P", new PdfObjectWriter.Ref(s.PageNo))
+                    .Add("F", 4)
+                    .Add("Rect", new object[] { s.Rect.X, s.Rect.Y, s.Rect.Right, s.Rect.Top })
+                    .Add("AP", new PdfObjectWriter.Dict()
+                        .Add("N", new PdfObjectWriter.Ref(s.Appearance.FormObjectNumber))));
+                WriteRaw(stampNos[i], stampSb.ToString(), null);
+            }
+
+            foreach (var p in signatureBlocks)
+            {
+                if (p.Appearance == null) continue;
                 foreach (var o in p.Appearance.Objects) WriteRaw(o.Number, o.DictText, o.StreamData);
+            }
+            foreach (var s in stampBlocks)
+            {
+                foreach (var o in s.Appearance.Objects) WriteRaw(o.Number, o.DictText, o.StreamData);
             }
 
             // Dict giá trị chữ ký. /ByteRange và /Contents ghi bằng CHỖ TRỐNG có bề rộng CỐ ĐỊNH rồi vá đè

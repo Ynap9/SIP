@@ -8,6 +8,8 @@
 
 # Artifact đóng gói release
 *.zip
+/SIPPACK-v*-Setup.exe
+/SIPPACK-v*/
 
 # SQLite local
 *.db

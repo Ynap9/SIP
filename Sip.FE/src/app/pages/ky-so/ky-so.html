@@ -1,40 +1,126 @@
-<div class="flex flex-col gap-4">
+<!-- min-h-0 flex-1: nối chiều cao từ thẻ host xuống nội dung từng bước, để bảng ở bước ký biết còn bao
+     nhiêu chỗ mà cuộn bên trong thay vì kéo dài cả trang. -->
+<div class="flex min-h-0 flex-1 flex-col gap-4">
   <app-breadcrumb [home]="home" [items]="breadcrumbItems" />
 
-  <!-- Tiêu đề trang -->
-  <h1 class="text-xl font-semibold text-slate-800">Quy trình ký số</h1>
+  <h1 class="text-xl font-semibold text-slate-800">Ký số</h1>
 
-  <!-- Chỉ báo 3 bước: click chọn bước được (bước sau tự cảnh báo nếu chưa xong bước trước) -->
-  <p-steps
-    [model]="steps"
-    [activeIndex]="activeStep()"
-    [readonly]="false"
-    styleClass="ky-so-steps"
-    (activeIndexChange)="onStepChange($event)"
-  />
+  <div class="grid grid-cols-12 gap-4">
+    <div class="col-span-7 min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <h2 class="mb-3 flex items-center gap-2 text-base font-semibold text-slate-800">
+        <i class="pi pi-folder-open text-primary"></i>
+        Thư mục cần ký
+      </h2>
 
-  <!-- Nội dung theo bước hiện tại -->
-  @switch (activeStep()) {
-    @case (0) {
-      <app-cert-step (verified)="onVerified($event)" />
-    }
-    @case (1) {
-      <app-config-step
-        [certName]="verifiedCert()?.commonName ?? ''"
-        [(sourcePath)]="sourcePath"
-        (configured)="onConfigured($event)"
-        (back)="backToCert()"
-      />
-    }
-    @case (2) {
-      <app-sign-step
-        [thumbprint]="verifiedCert()?.thumbprint ?? ''"
-        [certName]="verifiedCert()?.commonName ?? ''"
-        [ready]="!!verifiedCert()"
-        [initialSourcePath]="sourcePath()"
-        [config]="signConfig()"
-        (back)="backToConfig()"
-      />
-    }
+      <div
+        class="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-4 transition-colors"
+        [ngClass]="isDragOver() ? 'border-primary bg-primary-50' : 'border-slate-300 bg-slate-50'"
+        (dragover)="onDragOver($event)"
+        (dragleave)="onDragLeave($event)"
+        (drop)="onDropFolder($event)"
+      >
+        <i class="pi pi-cloud-upload text-3xl text-slate-400"></i>
+        <span class="text-sm text-slate-600">Kéo thả thư mục cần ký số vào đây</span>
+        <p-button
+          label="Chọn thư mục"
+          icon="pi pi-folder"
+          severity="secondary"
+          [outlined]="true"
+          (onClick)="chooseFolder()"
+        />
+      </div>
+
+      <div class="mt-3 flex items-center gap-2">
+        <input
+          pInputText
+          class="flex-1"
+          placeholder="Hoặc dán đường dẫn thư mục vào đây"
+          [ngModel]="pathInput()"
+          (ngModelChange)="pathInput.set($event)"
+          (keyup.enter)="applyPathInput()"
+        />
+        <p-button label="Chọn" icon="pi pi-check" (onClick)="applyPathInput()" />
+      </div>
+    </div>
+
+    <div class="col-span-5 flex min-w-0 flex-col gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div class="flex items-center justify-between gap-2">
+        <h2 class="flex items-center gap-2 text-base font-semibold text-slate-800">
+          <i class="pi pi-verified text-primary"></i>
+          Cấu hình chữ ký
+        </h2>
+        <p-button
+          label="Quản lý template"
+          icon="pi pi-cog"
+          severity="secondary"
+          size="small"
+          [text]="true"
+          (onClick)="goToTemplates()"
+        />
+      </div>
+
+      <div class="flex flex-col gap-1">
+        <label class="text-sm font-medium text-slate-700">Template chữ ký</label>
+        <p-select
+          [options]="templates()"
+          [ngModel]="templateId()"
+          optionLabel="tenTemplate"
+          optionValue="id"
+          [filter]="true"
+          filterBy="tenTemplate,tenChungThu"
+          [loading]="templateLoading()"
+          placeholder="Chọn template đã cấu hình"
+          emptyMessage="Chưa có template nào"
+          class="w-full"
+          (onChange)="onTemplateChange($event.value)"
+        />
+      </div>
+
+      <div class="flex flex-col gap-1">
+        <label class="text-sm font-medium text-slate-700">Chứng thư số</label>
+        <div class="flex items-center gap-2">
+          <p-select
+            [options]="certs()"
+            [ngModel]="thumbprint()"
+            optionLabel="commonName"
+            optionValue="thumbprint"
+            [filter]="true"
+            filterBy="commonName,serialNumber,issuerCommonName"
+            [loading]="certLoading()"
+            [placeholder]="certName() || 'Chọn chứng thư số'"
+            class="min-w-0 flex-1"
+            (onChange)="onCertChange($event.value)"
+          />
+          <p-button
+            label="Xác thực PIN"
+            icon="pi pi-key"
+            [outlined]="true"
+            [disabled]="!thumbprint()"
+            [loading]="verifying()"
+            (onClick)="verify()"
+          />
+        </div>
+        @if (isVerified()) {
+          <p-tag severity="success" icon="pi pi-check-circle" value="Đã xác thực, sẵn sàng ký" class="self-start" />
+        } @else {
+          <small class="text-slate-500">Chưa xác thực thì bấm Ký số sẽ tự mở hộp nhập PIN của token.</small>
+        }
+      </div>
+    </div>
+  </div>
+
+  @if (!selectedTemplate()) {
+    <p-message severity="info" text="Chọn template chữ ký để bắt đầu. Chưa có template thì tạo ở Cấu hình → Template chữ ký." />
+  } @else if (!sourcePath()) {
+    <p-message severity="info" text="Chọn thư mục cần ký để kiểm tra định dạng và ký số." />
+  } @else {
+    <app-sign-step
+      [thumbprint]="thumbprint() ?? ''"
+      [certName]="certName()"
+      [initialSourcePath]="sourcePath()"
+      [config]="signConfig()"
+      [reason]="selectedTemplate()?.lyDoKy ?? ''"
+      [location]="selectedTemplate()?.noiKy ?? ''"
+    />
   }
 </div>

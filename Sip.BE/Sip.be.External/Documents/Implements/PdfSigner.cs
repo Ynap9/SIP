@@ -84,6 +84,11 @@ namespace Sip.be.External.Documents.Implements
                 await signer.GetSignatureSizeAsync(),
                 // null/rỗng = giữ nguyên vị trí mặc định (góc trên-phải, khổ chuẩn co giãn theo trang).
                 options.Placements,
+                options.FontFamily,
+                options.FontSize,
+                options.TextColor,
+                options.SealImage,
+                options.WetSignatureImage,
                 _placementResolver,
                 // CadesSigner giữ NGUYÊN như cũ (nhận Stream) — phần mật mã đã chạy đúng, không đụng vào.
                 async (bytes, _) => await signer.GetSignatureAsync(new MemoryStream(bytes)),

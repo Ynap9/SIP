@@ -56,6 +56,11 @@ namespace Sip.be.Shared.Request.ErrorRequest
             { ErrorCodes.SignPdfStructureUnsupported, "Cấu trúc file PDF không hỗ trợ ký nối bản" },
             { ErrorCodes.PdfFormatInvalid, "File không đạt yêu cầu định dạng PDF/A hai lớp để ký số" },
             { ErrorCodes.SignPositionInvalid, "Vị trí đặt chữ ký không hợp lệ" },
+
+            { ErrorCodes.SignTemplateNotFound, "Không tìm thấy template cấu hình chữ ký" },
+            { ErrorCodes.SignTemplateNameDuplicated, "Tên template đã tồn tại trên máy này" },
+            { ErrorCodes.SignTemplateImageInvalid, "Ảnh dấu đỏ hoặc chữ ký tươi không hợp lệ" },
+            { ErrorCodes.SignTemplateSampleMissing, "Bản cài thiếu file PDF mẫu để xem trước" },
         };
 
         public static string GetMessage(int code)

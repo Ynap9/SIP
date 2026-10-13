@@ -1,0 +1,16 @@
+<div class="flex items-center justify-center gap-1">
+  <p-button
+    icon="pi pi-pencil"
+    severity="secondary"
+    [text]="true"
+    pTooltip="Cấu hình"
+    (onClick)="onClick(actionTypes.update)"
+  />
+  <p-button
+    icon="pi pi-trash"
+    severity="danger"
+    [text]="true"
+    pTooltip="Xoá"
+    (onClick)="onClick(actionTypes.delete)"
+  />
+</div>

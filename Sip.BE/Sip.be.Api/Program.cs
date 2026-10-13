@@ -7,6 +7,7 @@ using Sip.be.Application.Document.Interfaces;
 using Sip.be.External.Documents;
 using Sip.be.infratructure.Persistence;
 using Sip.be.Shared.Constants;
+using Sip.be.Shared.Constants.Documents;
 using Sip.be.External.Documents.Interfaces;
 using Sip.be.External.Documents.Implements;
 
@@ -81,6 +82,8 @@ namespace Sip.be.Api
             builder.Services.AddScoped<IPackService, PackService>();
             builder.Services.AddScoped<IUnpackService, UnpackService>();
             builder.Services.AddScoped<ISignService, SignService>();
+            // Template cấu hình chữ ký - CRUD trên DB riêng của máy, tách hẳn khỏi ISignService.
+            builder.Services.AddScoped<ISignTemplateService, SignTemplateService>();
             // Logic phụ trợ (bên thứ 3) ở Sip.be.External - đọc/verify chữ ký số PDF, đọc chứng thư số
             builder.Services.AddScoped<IPdfSignatureReader, PdfSignatureReader>();
             builder.Services.AddScoped<ISignatureVerifier, SignatureVerifier>();
@@ -142,6 +145,15 @@ namespace Sip.be.Api
             builder.Services.AddDbContext<SipDbContext>(options =>
                 options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+            // DB RIÊNG cho template cấu hình chữ ký. Đường dẫn CHỐT BẰNG CODE, KHÔNG lấy từ cấu hình và không
+            // nhận từ Sip.Desktop: template là dữ liệu của riêng một máy, phải nằm ngoài thư mục cài (người
+            // dùng nén zip cả thư mục mang sang máy khác) và ngoài sip.db (sip.db của máy dev bị build-desktop
+            // đóng thành seed rồi copy sang mọi máy cài app). Chốt cứng ở đây thì kể cả chạy dev-mode template
+            // cũng ghi vào %AppData% chứ không rơi vào repo để bị đóng gói theo.
+            var signTemplatesReset = SignTemplateMachineBinding.Ensure();
+            builder.Services.AddDbContext<SignTemplateDbContext>(options =>
+                options.UseSqlite($"Data Source={SignTemplateConstants.DatabasePath}"));
+
             // Swagger để test API
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
@@ -152,6 +164,11 @@ namespace Sip.be.Api
             using (var scope = app.Services.CreateScope())
             {
                 scope.ServiceProvider.GetRequiredService<SipDbContext>().Database.Migrate();
+                scope.ServiceProvider.GetRequiredService<SignTemplateDbContext>().Database.Migrate();
+            }
+            if (signTemplatesReset)
+            {
+                app.Logger.LogWarning("Dữ liệu template chữ ký thuộc máy khác nên đã được xoá và khởi tạo lại.");
             }
 
             // Configure the HTTP request pipeline.

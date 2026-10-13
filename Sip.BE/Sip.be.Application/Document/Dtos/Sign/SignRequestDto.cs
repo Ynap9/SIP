@@ -48,5 +48,15 @@ namespace Sip.be.Application.Document.Dtos.Sign
         /// không phải đổi payload khi bộ dò được bổ sung.
         /// </summary>
         public bool AllowOverlapContent { get; set; }
+
+        public string? FontFamily { get; set; }
+
+        public double? FontSize { get; set; }
+
+        public string? TextColor { get; set; }
+
+        public string? SealImagePath { get; set; }
+
+        public string? WetSignatureImagePath { get; set; }
     }
 }

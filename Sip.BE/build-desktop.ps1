@@ -9,7 +9,7 @@ $desktop = Join-Path $root 'Sip.Desktop'
 $publish = Join-Path $repo 'publish'   # xuất ra thư mục gốc Sip\publish cho dễ tìm
 
 # 0) Tắt app đang chạy (nếu có) để giải phóng file DLL trong publish/
-Get-Process -Name 'SIPPACK' -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process -Name 'SIPPACK' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 400
 
 # 1) Build Angular (config "desktop" -> baseUrl rỗng, same-origin)
@@ -70,6 +70,7 @@ New-Item -ItemType Directory -Force -Path $driverOut | Out-Null
 $drivers = [ordered]@{
     'bit4id_xpki_1.4.10.764-ng-user-vgca-pkimgr-bwc.exe' = 'Bit4id Universal MW - middleware bắc cầu token vào Windows Cert Store'
     'gca01-client-v2-x64-8.3.msi'                        = 'VGCA GCA01-Client v2 - trình điều khiển token Ban Cơ yếu'
+    'VGCAv1_Installer_1.0.21.0402.exe'                   = 'VGCA TokenManager - trình điều khiển token đời cũ (trước 2022)'
     'MicrosoftEdgeWebView2Setup.exe'                     = 'WebView2 Runtime - nhân hiển thị giao diện'
 }
 $driverMissing = @()
@@ -140,6 +141,12 @@ if (-not ($archive.Entries | Where-Object { $_.FullName -eq 'Log/' })) {
 }
 $archive.Dispose()
 Write-Host ("   {0} ({1} MB)" -f $zip, [math]::Round((Get-Item $zip).Length / 1MB, 1)) -ForegroundColor DarkGray
+
+if ($makensis) {
+    $setupRelease = Join-Path $repo "SIPPACK-v$ver-win-x64-Setup.exe"
+    Copy-Item (Join-Path $root 'installer/installer-output/SIPPACK-Setup.exe') $setupRelease -Force
+    Write-Host ("   {0} ({1} MB)" -f $setupRelease, [math]::Round((Get-Item $setupRelease).Length / 1MB, 1)) -ForegroundColor DarkGray
+}
 
 Write-Host ''
 Write-Host "==> Xong. Thư mục app: $publish" -ForegroundColor Green

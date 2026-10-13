@@ -7,8 +7,19 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- BaseRequestPagingDto gắn [FromQuery] nên cần kiểu của ASP.NET Core. Đây là classlib thuần
+         (Microsoft.NET.Sdk) nên phải khai FrameworkReference; thiếu dòng này là cả solution không build. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Bộ schema chuẩn (.xsd) - copy ra output để PackService dùng làm template cho schemas/ của gói SIP -->
     <Content Include="Templates\**\*.xsd">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <!-- File PDF mẫu - đi kèm bản cài để người dùng đặt thử vị trí chữ ký/dấu khi chưa có hồ sơ thật.
+         Là asset CHỈ ĐỌC nằm cạnh app nên SignTemplateConstants resolve nó từ AppContext.BaseDirectory. -->
+    <Content Include="Templates\**\*.pdf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

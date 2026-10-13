@@ -13,6 +13,10 @@ Call the **`sip-project-guide`** agent once, before touching anything:
 
 > "Brief me on SIPPACK" — or a targeted question if the task area is already known.
 
+It reads **docs, skills, contracts, the newest plan and the memory index — never `Sip.BE/**` or `Sip.FE/**`**, so a
+briefing costs a fraction of a code sweep. The trade is that **the docs are the only map anyone gets**: whenever your
+change makes a doc wrong, fix that doc in the same task, or the next session starts from a lie.
+
 Then read `.claude/review/` for open findings. Do not start work on a stale mental model.
 
 ## Phase 2 — Task routing

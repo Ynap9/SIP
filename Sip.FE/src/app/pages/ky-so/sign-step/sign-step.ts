@@ -1,4 +1,4 @@
-import { Component, OnDestroy, computed, effect, inject, input, output, signal } from '@angular/core';
+import { Component, OnDestroy, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { ProgressBarModule } from 'primeng/progressbar';
 import { TableModule } from 'primeng/table';
@@ -9,6 +9,7 @@ import { BaseComponent } from '../../../shared/components/base/base-component';
 import { Utils } from '../../../shared/utils';
 import { DesktopService } from '../../../services/desktop.service';
 import { SignService } from '../../../services/sign.service';
+import { SignCertStateService } from '../../../services/sign-cert-state.service';
 import {
   IPdfFormatProgress,
   IPdfFormatSummary,
@@ -37,21 +38,19 @@ import { SignResultDialog } from './sign-result-dialog/sign-result-dialog';
 })
 export class SignStep extends BaseComponent implements OnDestroy {
   private signService = inject(SignService);
+  private certState = inject(SignCertStateService);
   protected desktop = inject(DesktopService);
 
-  // Chứng thư số đã xác thực ở bước 1.
   thumbprint = input<string>('');
   certName = input<string>('');
-  // Bước 1 đã hoàn tất (đã verify token) chưa -> quyết định cho ký hay chỉ cảnh báo.
-  ready = input<boolean>(false);
   // Thư mục đã chọn ở bước cấu hình. Đây là NGUỒN DUY NHẤT của bước này: không còn ô kéo thả/nhập đường dẫn
   // ở đây nữa, vì cấu hình chữ ký được đặt trên chính các file của thư mục đó - đổi nguồn ở bước ký là mọi
   // vị trí vừa đặt trở thành vô nghĩa.
   initialSourcePath = input<string>('');
   // Cấu hình chữ ký chốt ở bước 2 (vị trí + cho đè nội dung); null = chưa qua bước cấu hình.
   config = input<ISignConfig | null>(null);
-  // Quay lại bước trước.
-  back = output<void>();
+  reason = input<string>('');
+  location = input<string>('');
 
   sourcePath = signal<string>('');
 
@@ -61,15 +60,23 @@ export class SignStep extends BaseComponent implements OnDestroy {
     // và không có đường nào để nguồn ở đây khác nguồn đã đặt chữ ký.
     effect(() => {
       const path = this.initialSourcePath();
-      if (!path || path === this.sourcePath()) return;
+      this.config();
+      if (!path) return;
 
-      this.sourcePath.set(path);
-      this.startCheck();
+      untracked(() => {
+        if (path !== this.sourcePath()) {
+          this.sourcePath.set(path);
+          this.startCheck();
+          return;
+        }
+        this.checkPositions(Utils.normalizeFolderPath(path));
+      });
     });
   }
 
   checking = signal<boolean>(false);
   signing = signal<boolean>(false);
+  verifying = signal<boolean>(false);
   checkDone = signal<boolean>(false);
   // Tổng kết bước kiểm định dạng (validCount/invalidCount/total) để quyết gate ký + note bỏ qua.
   checkSummary = signal<IPdfFormatSummary | null>(null);
@@ -108,8 +115,8 @@ export class SignStep extends BaseComponent implements OnDestroy {
     return PDF_FORMAT_VERDICT_LABELS[v as EPdfFormatVerdict] ?? '';
   }
 
-  /** Màu tag của verdict. */
-  verdictSeverity(v: number): 'success' | 'danger' {
+  verdictSeverity(v: number, canSign?: boolean): 'success' | 'warn' | 'danger' {
+    if (canSign) return v === EPdfFormatVerdict.Valid ? 'success' : 'warn';
     return PDF_FORMAT_VERDICT_SEVERITIES[v as EPdfFormatVerdict] ?? 'danger';
   }
 
@@ -123,12 +130,15 @@ export class SignStep extends BaseComponent implements OnDestroy {
     return !!this.sourcePath().trim() && !this.checking() && !this.signing();
   }
 
-  /**
-   * Nút "Ký số" mở khoá khi đã xong bước 1, có ÍT NHẤT MỘT file hợp lệ và không đang chạy tác vụ nào.
-   * Không bắt buộc CẢ lô đạt: file không đạt sẽ được BE gate PDF/A phòng thủ trả trạng thái "Bỏ qua".
-   */
   canSign(): boolean {
-    return this.ready() && this.checkDone() && this.validCount() > 0 && !this.checking() && !this.signing();
+    return (
+      !!this.thumbprint() &&
+      this.checkDone() &&
+      this.validCount() > 0 &&
+      !this.checking() &&
+      !this.signing() &&
+      !this.verifying()
+    );
   }
 
   // ===== Bước kiểm định dạng (SSE) + kiểm vị trí chữ ký =====
@@ -208,7 +218,9 @@ export class SignStep extends BaseComponent implements OnDestroy {
                 ...r,
                 checkStatus: f.canSign ? 'ok' : 'error',
                 verdict: f.verdict,
-                checkMessage: f.canSign ? undefined : f.message
+                canSign: f.canSign,
+                // File Valid thì message chỉ lặp lại nhãn badge nên bỏ trống cột Nguyên nhân.
+                checkMessage: f.verdict === EPdfFormatVerdict.Valid ? undefined : f.message
               }
             : r
         )
@@ -227,10 +239,32 @@ export class SignStep extends BaseComponent implements OnDestroy {
   // ===== Bước ký (SSE), khởi động từ popup =====
   onOpenSignDialog(): void {
     if (!this.canSign()) {
-      this.messageWarning('Không có file nào đạt định dạng PDF/A hai lớp để ký. Vui lòng kiểm tra lại.');
+      this.messageWarning('Không có file PDF nào ký được. Vui lòng kiểm tra lại.');
       return;
     }
-    this.showSignDialog.set(true);
+    if (this.certState.verifiedCert()?.thumbprint === this.thumbprint()) {
+      this.showSignDialog.set(true);
+      return;
+    }
+
+    this.verifying.set(true);
+    this.signService.verifyToken(this.thumbprint()).subscribe({
+      next: (res) => {
+        this.verifying.set(false);
+        if (!this.isResponseSucceed(res)) return;
+        if (res.data?.valid) {
+          this.certState.verifiedCert.set(res.data);
+          this.showSignDialog.set(true);
+        } else {
+          this.certState.verifiedCert.set(null);
+          this.messageError(res.data?.reason || 'Chứng thư số chưa sẵn sàng để ký. Vui lòng kiểm tra lại token/PIN.');
+        }
+      },
+      error: () => {
+        this.verifying.set(false);
+        this.messageError('Không kiểm tra được chứng thư số. Vui lòng thử lại sau.');
+      }
+    });
   }
 
   onStartSign(payload: { reason: string; location: string }): void {
@@ -249,7 +283,12 @@ export class SignStep extends BaseComponent implements OnDestroy {
       useCustomPosition: config.useCustomPosition,
       allowOverlapContent: config.allowOverlapContent,
       positions: config.positions ?? null,
-      fileOverrides: config.fileOverrides ?? null
+      fileOverrides: config.fileOverrides ?? null,
+      fontFamily: this.config()?.fontFamily ?? null,
+      fontSize: this.config()?.fontSize ?? null,
+      textColor: this.config()?.textColor ?? null,
+      sealImagePath: this.config()?.sealImagePath ?? null,
+      wetSignatureImagePath: this.config()?.wetSignatureImagePath ?? null
     };
 
     this.sub?.unsubscribe();
@@ -322,9 +361,5 @@ export class SignStep extends BaseComponent implements OnDestroy {
       () => this.messageSuccess('Đã sao chép đường dẫn thư mục kết quả vào clipboard.'),
       () => this.messageWarning('Không mở được thư mục. Đường dẫn: ' + path)
     );
-  }
-
-  onBack(): void {
-    this.back.emit();
   }
 }

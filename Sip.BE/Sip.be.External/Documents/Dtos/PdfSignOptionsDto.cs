@@ -1,3 +1,5 @@
+using Sip.be.Shared.Constants.Documents;
+
 namespace Sip.be.External.Documents.Dtos
 {
     /// <summary>
@@ -33,5 +35,15 @@ namespace Sip.be.External.Documents.Dtos
         /// <c>ISignaturePlacementResolver</c> chỉ việc dùng thêm, FE không phải đổi payload.
         /// </summary>
         public bool AllowOverlapContent { get; set; }
+
+        public string FontFamily { get; set; } = SigningConstants.AppearanceFontFamily;
+
+        public double FontSize { get; set; } = SigningConstants.AppearanceFontSize;
+
+        public string TextColor { get; set; } = SigningConstants.AppearanceTextColor;
+
+        public byte[]? SealImage { get; set; }
+
+        public byte[]? WetSignatureImage { get; set; }
     }
 }

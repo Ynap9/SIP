@@ -1,42 +1,10 @@
-<div class="flex flex-col gap-4">
-  <!-- Chưa xong bước 1: cảnh báo, không cho thao tác ký (không chặn cứng navigation) -->
-  @if (!ready()) {
-    <p-message severity="warn" class="block w-full">
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <span class="text-sm">Vui lòng chọn chứng thư số ở Bước 1 trước khi ký số.</span>
-        <p-button
-          label="Về Bước 1"
-          icon="pi pi-arrow-left"
-          severity="secondary"
-          [text]="true"
-          (onClick)="onBack()"
-        />
-      </div>
-    </p-message>
-  } @else {
-  <!-- Chứng thư số đã chọn ở bước 1 -->
-  <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
-    <div class="flex items-center gap-2 text-sm">
-      <i class="pi pi-verified text-green-600"></i>
-      <span class="text-slate-500">Ký bằng chứng thư số:</span>
-      <span class="font-semibold text-slate-800 break-all">{{ certName() || 'Đã chọn' }}</span>
-    </div>
-    <p-button
-      label="Đổi chứng thư số"
-      icon="pi pi-arrow-left"
-      severity="secondary"
-      [text]="true"
-      [disabled]="checking() || signing()"
-      (onClick)="onBack()"
-    />
-  </div>
-
+<div class="flex min-h-0 flex-1 flex-col gap-4">
   <!-- 1. Nguồn: lấy thẳng từ bước cấu hình chữ ký, KHÔNG cho đổi ở đây -->
   <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
     <div class="flex min-w-0 items-center gap-2 text-sm">
       <i class="pi pi-folder-open text-slate-500"></i>
       <span class="text-slate-500">Thư mục ký số:</span>
-      <span class="font-semibold break-all text-slate-800">{{ sourcePath() || 'Chưa chọn ở bước cấu hình' }}</span>
+      <span class="font-semibold break-all text-slate-800">{{ sourcePath() || 'Chưa chọn thư mục' }}</span>
     </div>
     <p-button
       label="Kiểm tra lại"
@@ -92,22 +60,33 @@
     </div>
   }
 
-  <!-- Chú thích điều kiện ký -->
-  <p class="flex items-start gap-1 text-xs text-slate-500">
-    <i class="pi pi-info-circle mt-0.5"></i>
-    <span>
-      Chỉ ký được file <b>PDF/A hai lớp</b> (ảnh scan + text OCR). Hệ thống kiểm định dạng mọi file trước; chỉ cần
-      <b>có ít nhất một</b> file hợp lệ là mở khoá nút <b>Ký số</b>. File không đạt sẽ tự động bị <b>bỏ qua</b>, không ký.
-    </span>
-  </p>
+  <div class="rounded-lg border border-slate-200 p-3">
+    <p class="flex items-start gap-1 text-xs text-slate-500">
+      <i class="pi pi-info-circle mt-0.5"></i>
+      <span>
+        File PDF chưa đạt <b>PDF/A hai lớp</b> (ảnh scan + text OCR) chỉ được <b>cảnh báo</b> và vẫn ký bình thường.
+        File không phải PDF hoặc không đọc được sẽ tự động bị <b>bỏ qua</b>, không ký.
+      </span>
+    </p>
+  </div>
 
   <!-- 2. Tiến trình + bảng -->
   @if (checking() || signing() || checkDone()) {
     <p-progressbar [value]="percent()" />
   }
 
+  <!-- Bảng cao đúng phần còn lại của trang (.table-frame) và cuộn BÊN TRONG nó - cả dọc lẫn ngang, vì bảng
+       rộng 60rem. Nhờ vậy khung chứng thư số phía trên và nút Ký số phía dưới luôn đứng yên; scrollHeight
+       "flex" ghim hàng tiêu đề lại khi cuộn dọc. -->
   @if (fileRows().length) {
-    <p-table [value]="sortedFileRows()" [showGridlines]="true" [tableStyle]="{ 'min-width': '60rem' }">
+    <p-table
+      styleClass="table-frame"
+      [value]="sortedFileRows()"
+      [showGridlines]="true"
+      [scrollable]="true"
+      scrollHeight="flex"
+      [tableStyle]="{ 'min-width': '60rem' }"
+    >
       <ng-template pTemplate="header">
         <tr>
           <th style="width: 4rem; text-align: center">STT</th>
@@ -126,19 +105,25 @@
           <td style="text-align: center">{{ i + 1 }}</td>
           <td style="text-align: center" class="break-all">{{ row.name }}</td>
 
-          <!-- Trạng thái kiểm định dạng: spinner khi đang kiểm -> badge theo verdict -->
+          <!-- Trạng thái kiểm định dạng: spinner khi đang kiểm -> badge nhãn theo verdict, MÀU theo ký được -->
           <td style="text-align: center">
             @if (row.checkStatus === 'processing') {
               <i class="pi pi-spin pi-spinner text-slate-500"></i>
             } @else if (row.verdict !== undefined && row.verdict !== null) {
-              <p-tag [value]="verdictLabel(row.verdict)" [severity]="verdictSeverity(row.verdict)" />
+              <p-tag [value]="verdictLabel(row.verdict)" [severity]="verdictSeverity(row.verdict, row.canSign)" />
             } @else {
               <span class="text-slate-300">—</span>
             }
           </td>
 
-          <!-- Nguyên nhân (chỉ có khi file không hợp lệ) -->
-          <td style="text-align: center" class="text-red-600">{{ row.checkMessage }}</td>
+          <!-- Nguyên nhân: đỏ khi file bị chặn, hổ phách khi chỉ là cảnh báo -->
+          <td
+            style="text-align: center"
+            [class.text-red-600]="row.canSign === false"
+            [class.text-amber-600]="row.canSign === true"
+          >
+            {{ row.checkMessage }}
+          </td>
 
           <!-- Trạng thái ký số -->
           <td style="text-align: center">
@@ -239,13 +224,18 @@
       icon="pi pi-pencil"
       styleClass="w-44 justify-center"
       [disabled]="!canSign()"
-      [loading]="signing()"
+      [loading]="signing() || verifying()"
       (onClick)="onOpenSignDialog()"
     />
   </div>
 
   <!-- Popup nhập thông tin ký -->
-  <app-sign-dialog [(visible)]="showSignDialog" (start)="onStartSign($event)" />
+  <app-sign-dialog
+    [(visible)]="showSignDialog"
+    [defaultReason]="reason()"
+    [defaultLocation]="location()"
+    (start)="onStartSign($event)"
+  />
 
   <!-- Dialog kết quả sau khi ký xong; nút "Mở thư mục" gọi lại openFolder của cha -->
   <app-sign-result-dialog
@@ -253,5 +243,4 @@
     [result]="signResult()"
     (openFolder)="openFolder($event)"
   />
-  }
 </div>

@@ -1,5 +1,6 @@
 using AutoMapper;
 using Sip.be.Application.Document.Dtos.Config;
+using Sip.be.Application.Document.Dtos.SignTemplate;
 using Sip.be.Domain.Document;
 using Sip.be.Domain.Documents;
 
@@ -11,6 +12,9 @@ namespace Sip.be.Application.Base
         {
             CreateMap<ConfigHoSo, ViewConfigHoSoDto>();
             CreateMap<ConfigVanBan, ViewConfigVanBanDto>();
+
+            CreateMap<SignTemplate, ViewSignTemplateDto>();
+            CreateMap<SignTemplatePosition, SignTemplatePositionDto>();
         }
     }
 }

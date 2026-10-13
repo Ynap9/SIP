@@ -11,6 +11,7 @@ export class DesktopService {
   private external: any = (window as any).external;
   private pendingPickFolder?: (path: string) => void;
   private pendingPickFile?: (path: string) => void;
+  private pendingPickImage?: (path: string) => void;
 
   constructor() {
     if (this.isDesktop && typeof this.external.receiveMessage === 'function') {
@@ -51,6 +52,14 @@ export class DesktopService {
     });
   }
 
+  pickImage(): Promise<string> {
+    if (!this.isDesktop) return Promise.resolve('');
+    return new Promise<string>((resolve) => {
+      this.pendingPickImage = resolve;
+      this.external.sendMessage('pickImage');
+    });
+  }
+
   /** Mở thư mục/file trong Explorer. Trả về false nếu không phải desktop (để gọi tự fallback). */
   openPath(path: string): boolean {
     if (!this.isDesktop || !path) return false;
@@ -68,6 +77,10 @@ export class DesktopService {
       const resolve = this.pendingPickFile;
       this.pendingPickFile = undefined;
       resolve(message.slice('file:'.length));
+    } else if (message.startsWith('image:') && this.pendingPickImage) {
+      const resolve = this.pendingPickImage;
+      this.pendingPickImage = undefined;
+      resolve(message.slice('image:'.length));
     }
   }
 }

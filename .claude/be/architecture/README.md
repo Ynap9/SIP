@@ -3,16 +3,18 @@
 > Canonical doc for humans & agents. **Read this folder before adding/changing BE code** so you follow the project's real structure and rules. Do not change the architecture on your own.
 
 ## Business goal
-A **desktop** app (Photino host + Angular SPA + ASP.NET Core API in one process) to **check**, **pack**, **unpack** and **digitally sign** archival documents per the **TT05 / E-ARK CSIP** standard. Local DB is **SQLite**, storing only two config tables (`ConfigHoSo`, `ConfigVanBan`).
+A **desktop** app (Photino host + Angular SPA + ASP.NET Core API in one process) to **check**, **pack**, **unpack** and **digitally sign** archival documents per the **TT05 / E-ARK CSIP** standard. Local DB is **SQLite**, in **two separate files** under `%AppData%\SipPack`: `sip.db` (`ConfigHoSo`, `ConfigVanBan`) and `sign-templates.db` (`SignTemplate`, `SignTemplatePosition`). Package/check/sign data itself is **never** persisted.
 
 ## Overall architecture — Clean Architecture (.NET 8+)
 
 ```
 Sip.be.Api            → Controllers, Program.cs (composition root), BaseController
 Sip.be.Application    → Business logic: Interfaces + Implements (Services), Dtos, Base, MappingProfile
-Sip.be.Domain         → Entities (POCO): ConfigHoSo, ConfigVanBan
-Sip.be.Infratructure  → SipDbContext (EF Core SQLite) + Migrations   [note: folder name is misspelled, keep it]
-Sip.be.Shared         → ApiResponse, Exceptions, ErrorCodes, Constants, Interfaces, Templates/schemas
+Sip.be.Domain         → Entities (POCO): ConfigHoSo, ConfigVanBan, SignTemplate, SignTemplatePosition
+Sip.be.Infratructure  → SipDbContext + SignTemplateDbContext (EF Core SQLite) + 2 migration folders
+                         [note: folder name is misspelled, keep it]
+Sip.be.Shared         → ApiResponse, Exceptions, ErrorCodes, Constants, Interfaces,
+                         Request/BaseRequest (paging), Templates/{schemas,sample}
 Sip.be.External       → 3rd-party/low-level work, SELF-CONTAINED (own Documents/{Interfaces,Implements,Dtos}):
                          PDF signature read + verify, PDF signing (incremental update), signature placement,
                          RFC 3161 TSA client, certificate store access, PDF/A inspection
@@ -41,5 +43,6 @@ Sip.Desktop           → Desktop host (Photino) that self-hosts the WebApplicat
 - **Pack** — pack a folder into a SIP package (EAD.xml + METS.xml + ZIP); nothing persisted to DB. `multi` packs a parent folder (SSE).
 - **Unpack** — reverse a SIP `.zip`/folder back into a hồ sơ folder + Excel (`UnpackController`).
 - **Sign** — list certificates (incl. USB token), gate PDF/A, sign a folder with a Ban Cơ yếu RFC 3161 timestamp (SSE) (`SignController`).
+- **Sign template** — CRUD + paging of reusable signing presets (cert, reason/location, stamp images, block ratios) in `sign-templates.db` (`SignTemplateController`). BE + FE done (`/cau-hinh/template-chu-ky`); seal / wet-signature images are stamped as `/Stamp` annotations when signing — contract: [../../contracts/sign-template.contract.md](../../contracts/sign-template.contract.md).
 
 Multi + Unpack business rules: [../../../docs/multi-unpack-flows.md](../../../docs/multi-unpack-flows.md). Signing: [../../../docs/verify-signature-timestamp.md](../../../docs/verify-signature-timestamp.md).

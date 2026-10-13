@@ -1,4 +1,4 @@
-<div class="flex flex-col gap-4">
+<div class="flex min-h-0 flex-1 flex-col gap-4">
   <!-- 1. Khu vực đưa thư mục vào -->
   <div
     class="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed py-12 transition-colors"
@@ -46,8 +46,18 @@
     <p-progressbar [value]="percent()" />
   }
 
+  <!-- Bảng cao đúng phần còn lại của trang (.table-frame) và cuộn BÊN TRONG nó, nên dù bao nhiêu file thì
+       ô đường dẫn phía trên và nút thao tác phía dưới vẫn nằm nguyên chỗ cũ. scrollHeight="flex" ghim luôn
+       hàng tiêu đề ở trên và dòng "Kết quả hồ sơ" ở dưới. -->
   @if (fileRows().length) {
-    <p-table [value]="sortedFileRows()" [showGridlines]="true" [tableStyle]="{ 'min-width': '50rem' }">
+    <p-table
+      styleClass="table-frame"
+      [value]="sortedFileRows()"
+      [showGridlines]="true"
+      [scrollable]="true"
+      scrollHeight="flex"
+      [tableStyle]="{ 'min-width': '50rem' }"
+    >
       <ng-template pTemplate="header">
         <tr>
           <th style="width: 4rem; text-align: center">STT</th>

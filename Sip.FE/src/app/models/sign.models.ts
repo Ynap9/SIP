@@ -60,9 +60,8 @@ export interface ITokenVerify {
 export interface IPdfFormatFileResult {
   fileName: string;
   fullPath: string;
-  /** EPdfFormatVerdict (số). */
+  /** EPdfFormatVerdict (số) - LUÔN là định dạng thật của file. */
   verdict: number;
-  /** Chỉ true khi verdict = Valid. */
   canSign: boolean;
   message: string;
   pdfAPart?: string | null;
@@ -74,7 +73,7 @@ export interface IPdfFormatSummary {
   totalFiles: number;
   validCount: number;
   invalidCount: number;
-  /** True khi mọi file đều Valid -> mở khoá bước ký. */
+  /** True khi mọi file đều ký được -> mở khoá bước ký. */
   allValid: boolean;
 }
 
@@ -192,6 +191,7 @@ export interface ISignPosition {
   yRatio: number;
   widthRatio: number;
   heightRatio: number;
+  kind?: number;
 }
 
 // Cấu hình riêng cho 1 file, ghi đè positions chung (khớp SignFileConfigDto BE).
@@ -211,6 +211,11 @@ export interface ISignConfig {
   positions?: ISignPosition[] | null;
   /** Các file người dùng cấu hình riêng; file không có ở đây dùng positions chung. */
   fileOverrides?: ISignFileConfig[] | null;
+  fontFamily?: string | null;
+  fontSize?: number | null;
+  textColor?: string | null;
+  sealImagePath?: string | null;
+  wetSignatureImagePath?: string | null;
 }
 
 // Yêu cầu kiểm vị trí chữ ký trước khi ký (khớp SignPositionCheckRequestDto BE) - không cần chứng thư số.
@@ -252,6 +257,11 @@ export interface ISignRequest {
   allowOverlapContent: boolean;
   positions?: ISignPosition[] | null;
   fileOverrides?: ISignFileConfig[] | null;
+  fontFamily?: string | null;
+  fontSize?: number | null;
+  textColor?: string | null;
+  sealImagePath?: string | null;
+  wetSignatureImagePath?: string | null;
 }
 
 // 1 dòng file hiển thị trên bảng ký số: gộp kết quả 2 bước (kiểm định dạng + ký) trên cùng 1 dòng.
@@ -259,8 +269,11 @@ export interface ISignFileRow {
   name: string;
   /** Trạng thái bước kiểm định dạng. */
   checkStatus: 'processing' | 'ok' | 'error';
-  /** EPdfFormatVerdict (số) sau khi kiểm xong. */
+  /** EPdfFormatVerdict (số) sau khi kiểm xong - định dạng THẬT của file. */
   verdict?: number;
+  /** File này có ký được không: quyết định màu badge, vì verdict != Valid vẫn có thể ký được. */
+  canSign?: boolean;
+  /** Message nguyên văn của BE (đã gồm cả câu "vẫn ký được do đã bật tuỳ chọn..."). */
   checkMessage?: string;
   /** Trạng thái bước ký (trống ở bước kiểm). */
   signStatus: 'idle' | 'processing' | 'signed' | 'skipped' | 'failed';

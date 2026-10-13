@@ -3,23 +3,24 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
 
 interface NavItem {
   label: string;
-  link: string;
   icon: string;
+  link: string;
 }
 
 @Component({
   selector: 'app-menu',
   imports: [RouterLink, RouterLinkActive],
   template: `
-    <nav class="layout-menu flex flex-col gap-1 p-3">
+    <nav class="layout-topbar-nav">
       @for (item of navItems; track item.link) {
         <a
           [routerLink]="item.link"
-          routerLinkActive="bg-indigo-50 text-indigo-700 font-semibold"
+          routerLinkActive="is-active"
           [routerLinkActiveOptions]="{ exact: item.link === '/' }"
-          class="group flex items-center gap-3 rounded-lg px-3 py-3 text-base font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
+          class="layout-topbar-nav-item"
+          draggable="false"
         >
-          <i [class]="item.icon" class="text-lg text-slate-400 group-hover:text-slate-600"></i>
+          <i class="pi" [class]="item.icon"></i>
           <span>{{ item.label }}</span>
         </a>
       }
@@ -28,10 +29,10 @@ interface NavItem {
 })
 export class Menu {
   protected readonly navItems: NavItem[] = [
-    { label: 'Trang chủ', link: '/', icon: 'pi pi-home' },
-    { label: 'Kiểm tra & đóng gói', link: '/dong-goi', icon: 'pi pi-box' },
-    { label: 'Ký số', link: '/ky-so', icon: 'pi pi-verified' },
-    { label: 'Bóc tách dữ liệu', link: '/boc-tach', icon: 'pi pi-sitemap' },
-    { label: 'Cấu hình', link: '/cau-hinh', icon: 'pi pi-cog' }
+    { label: 'Trang chủ', icon: 'pi-home', link: '/' },
+    { label: 'Kiểm tra & đóng gói', icon: 'pi-box', link: '/dong-goi' },
+    { label: 'Ký số', icon: 'pi-verified', link: '/ky-so' },
+    { label: 'Bóc tách dữ liệu', icon: 'pi-sitemap', link: '/boc-tach' },
+    { label: 'Cấu hình', icon: 'pi-cog', link: '/cau-hinh' }
   ];
 }

@@ -46,7 +46,7 @@ These call sites still use `DateTime.Now` and should migrate to `VietnamNow`:
 | File | Line | Use |
 |---|---|---|
 | `Sip.be.Application/Document/Implements/PackService.cs` | 679, 1077 | package folder timestamp |
-| `Sip.be.Application/Document/Implements/CheckService.cs` | 2020 | `chưa ký số_{date}` folder name |
+| `Sip.be.Application/Document/Implements/CheckService.cs` | 2022 | `chưa ký số_{date}` folder name |
 | `Sip.be.Api/Controllers/WeatherForecastController.cs` | 26 | scaffold sample, delete when convenient |
 
 They are left untouched here to keep this change scoped; migrate them in a dedicated task.

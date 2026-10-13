@@ -1,6 +1,5 @@
-:host {
-  display: block;
-}
+// Cách hiển thị của thẻ host do styles.css lo (khối app-dong-goi/app-check/app-multi bám khung trang),
+// đặt lại ở đây sẽ đè mất vì style của component nặng ký hơn selector toàn cục.
 
 // Bảng lưới tự dựng (hồ sơ + bảng con file), không dùng row-expansion của p-table.
 .grid-table {
@@ -16,9 +15,16 @@
     vertical-align: middle;
   }
 
+  // Bảng nằm trong khung cuộn nên ghim hàng tiêu đề lại: cuộn tới dòng thứ 200 vẫn biết đang đọc cột nào.
+  // border-collapse: collapse làm viền của ô đã ghim không được vẽ, nên dựng lại đường kẻ dưới bằng
+  // box-shadow — thiếu nó thì lúc cuộn tiêu đề trông như dính liền vào dữ liệu.
   thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
     background: #f8fafc;
     font-weight: 600;
+    box-shadow: inset 0 -1px 0 #e2e8f0;
   }
 
   &.child {

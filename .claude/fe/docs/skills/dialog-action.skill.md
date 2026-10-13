@@ -10,7 +10,7 @@ NOT for full pages (use `feature-page.skill.md`) nor SSE progress (use the SSE p
 
 ## Structure
 - **Model** `models/<feature>.models.ts` — `IXxxRequest` (camelCase, BE DTO) + `IXxxResult`.
-- **Service** `services/<feature>.service.ts` — `@Injectable({providedIn:'root'})`, `HttpClient` + `environment.baseUrl`, returns `IBaseResponseWithData<IXxxResult>`.
+- **Service** `services/<feature>.service.ts` — `@Injectable({providedIn:'root'})`, `HttpClient` + `desktop.apiBase`, returns `IBaseResponseWithData<IXxxResult>`.
 - **Dialog component** `pages/<feature>/<name>-dialog/<name>-dialog.ts|html|scss` + `.spec.ts`:
   - `extends BaseComponent`, `imports:[...SharedImports]` (Dialog/Button/InputText/InputNumber/Message already in `SharedImports`).
   - Inputs: feature data via `input<T>()`; visibility via `visible = model<boolean>()` (two-way `[(visible)]` from parent).
@@ -78,11 +78,12 @@ onSubmit(): void {
 </p-dialog>
 ```
 ```ts
-// Open output folder. Keep this the SINGLE swap point for desktop build.
+private readonly desktop = inject(DesktopService);
+
+// Photino opens the path natively; under `ng serve` there is no bridge, so fall back to the clipboard.
 openFolder(path: string): void {
-  // TODO desktop (Electron): window.electron?.shell.openPath(path)
-  // TODO desktop (Tauri):   import { openPath } from '@tauri-apps/plugin-opener'; openPath(path)
-  navigator.clipboard?.writeText(path);                 // web-dev fallback
+  if (this.desktop.openPath(path)) return;   // false = not running in the desktop host
+  navigator.clipboard?.writeText(path);
   this.messageSuccess('Đã sao chép đường dẫn');
 }
 ```

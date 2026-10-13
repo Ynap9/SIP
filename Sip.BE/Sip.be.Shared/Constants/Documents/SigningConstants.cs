@@ -28,17 +28,17 @@ namespace Sip.be.Shared.Constants.Documents
 
         // ===== Hình thức chữ ký hiển thị =====
         // Số đo TRÍCH TỪ FILE THẬT (docs/pdf-signature-appearance.md), không phải tự chọn cho đẹp.
-        // Khối 170x30pt đặt ở góc TRÊN-PHẢI trang; 2 dòng chữ: dòng 1 = CN người ký, dòng 2 = giờ ký ISO 8601.
-        // Hai dòng được CANH GIỮA ô (không phải dóng trái x=2pt như file mẫu) nên không còn hằng số tọa độ
-        // từng dòng: chỗ đặt chữ suy ra từ chính khổ ô mà người dùng kéo thả.
+        // 2 dòng chữ: dòng 1 = CN người ký, dòng 2 = giờ ký ISO 8601.
         public const double AppearanceWidth = 170;
         public const double AppearanceHeight = 30;
         public const string AppearanceFontFamily = "Times New Roman";
         public const double AppearanceFontSize = 10;
-        // Giờ ký hiển thị trong khối chữ ký: ISO 8601 theo giờ VN, KHÔNG kèm phần bù múi giờ.
-        // File mẫu ghi thêm "+07:00" ("2026-04-16T05:25:06.2686779+07:00") nhưng bỏ đi theo yêu cầu nghiệp vụ:
-        // mọi giờ trong khối đều là giờ VN nên phần bù chỉ làm khối dài thêm.
-        public const string AppearanceTimeFormat = "yyyy-MM-ddTHH:mm:ss.fffffff";
+        public const double AppearanceMinFontSize = 6;
+        public const double AppearanceMaxFontSize = 24;
+        public const string AppearanceTextColor = "#000000";
+        public static readonly string[] AppearanceFontFamilies =
+            { "Times New Roman", "Arial", "Verdana", "Georgia", "Courier New" };
+        public const string AppearanceTimeFormat = "yyyy-MM-ddTHH:mm:ss.fffffff'+07:00'";
 
         // ===== Co giãn khối chữ ký theo khổ trang =====
         // Khổ trang của file production mà bộ số 170x30pt ở trên được đo ra (A4 dọc). Khối chữ ký được nhân
@@ -47,11 +47,6 @@ namespace Sip.be.Shared.Constants.Documents
         // dùng chung cho cả thư mục có nhiều khổ giấy.
         public const double AppearanceReferencePageWidth = 595;
         public const double AppearanceReferencePageHeight = 842;
-
-        // Sàn kích cỡ khi người dùng TỰ chọn vị trí: khối không được nhỏ hơn ngần này lần khổ chuẩn của trang.
-        // Vị trí người dùng chọn được tôn trọng nguyên vẹn; chỉ hai thứ bị sửa là khối TRÀN ra ngoài trang
-        // (kẹp lại) và khối NHỎ tới mức không đọc nổi chữ (kéo lên sàn này). Khớp SIGN_BLOCK_MIN_SCALE của FE.
-        public const double AppearanceMinScale = 0.5;
 
         // Lề chừa với mép trang khi TỰ đặt chữ ký (vị trí mặc định) — dính sát mép trông như lỗi in.
         // Cũng co giãn theo khổ trang như khối chữ ký.

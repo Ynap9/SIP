@@ -287,16 +287,17 @@ namespace Sip.be.Application.Document.Implements
                 var inspect = await Task.Run(() => _pdfFormatInspector.Inspect(path), cancellationToken);
                 current++;
 
-                var canSign = inspect.Verdict == PdfFormatVerdict.Valid;
+                var canSign = inspect.Verdict == PdfFormatVerdict.Valid
+                    || inspect.Verdict == PdfFormatVerdict.NotPdfA
+                    || inspect.Verdict == PdfFormatVerdict.NotTwoLayer;
                 if (canSign) valid++; else invalid++;
 
-                // Thông điệp tiếng Việt cho người dùng, khớp đúng verdict (chốt theo yêu cầu + TT05).
                 var message = inspect.Verdict switch
                 {
                     PdfFormatVerdict.Valid => "PDF/A hai lớp hợp lệ, ký được.",
                     PdfFormatVerdict.NotPdf => "Chưa thể ký số với file khác định dạng PDF.",
-                    PdfFormatVerdict.NotPdfA => "File không phải PDF/A, chưa thể ký số.",
-                    PdfFormatVerdict.NotTwoLayer => "PDF/A không đủ 2 lớp (ảnh scan + text OCR), chưa thể ký số.",
+                    PdfFormatVerdict.NotPdfA => "Cảnh báo: file không phải PDF/A, vẫn ký được.",
+                    PdfFormatVerdict.NotTwoLayer => "Cảnh báo: PDF/A không đủ 2 lớp (ảnh scan + text OCR), vẫn ký được.",
                     _ => "Không đọc được file, không thể ký số."
                 };
 
@@ -331,7 +332,7 @@ namespace Sip.be.Application.Document.Implements
                 Status = invalid == 0 ? StatusCodeE.Success : StatusCodeE.Error,
                 Code = invalid == 0 ? 200 : ErrorCodes.PdfFormatInvalid,
                 Message = invalid == 0
-                    ? $"Tất cả {total} file đều là PDF/A hai lớp, ký được."
+                    ? $"Tất cả {total} file đều ký được."
                     : $"Kiểm xong: {valid} file ký được, {invalid} file không ký được.",
                 Completed = true,
                 Current = total,
@@ -395,8 +396,35 @@ namespace Sip.be.Application.Document.Implements
                 Reason = request.Reason,
                 Location = request.Location,
                 Placements = placements,
-                AllowOverlapContent = request.AllowOverlapContent
+                AllowOverlapContent = request.AllowOverlapContent,
+                FontFamily = SigningConstants.AppearanceFontFamilies.Contains(request.FontFamily)
+                    ? request.FontFamily!
+                    : SigningConstants.AppearanceFontFamily,
+                FontSize = request.FontSize is > 0
+                    ? Math.Clamp(request.FontSize.Value, SigningConstants.AppearanceMinFontSize,
+                        SigningConstants.AppearanceMaxFontSize)
+                    : SigningConstants.AppearanceFontSize,
+                TextColor = string.IsNullOrWhiteSpace(request.TextColor)
+                    ? SigningConstants.AppearanceTextColor
+                    : request.TextColor
             };
+
+            foreach (var (path, isSeal) in new[] { (request.SealImagePath, true), (request.WetSignatureImagePath, false) })
+            {
+                if (string.IsNullOrWhiteSpace(path)) continue;
+
+                var ext = Path.GetExtension(path).ToLowerInvariant();
+                if (!File.Exists(path) || !SignTemplateConstants.AllowedImageExtensions.Contains(ext)
+                    || new FileInfo(path).Length > SignTemplateConstants.MaxImageBytes)
+                {
+                    throw new UserFriendlyException(ErrorCodes.SignTemplateImageInvalid,
+                        $"Ảnh {(isSeal ? "dấu đỏ" : "chữ ký tươi")} không hợp lệ hoặc không tồn tại: {path}");
+                }
+
+                var bytes = File.ReadAllBytes(path);
+                if (isSeal) signOptions.SealImage = bytes;
+                else signOptions.WetSignatureImage = bytes;
+            }
 
             var fileList = ListPdfFiles(request.SourcePath);
             if (fileList.Files.Count == 0)
@@ -486,18 +514,19 @@ namespace Sip.be.Application.Document.Implements
                         var fileResult = new SignFileResultDto { FileName = item.Name };
 
                         // ---- GATE định dạng TRƯỚC khi ký (defense-in-depth ở BE) ----
-                        // Không bao giờ ký file không đạt PDF/A hai lớp, kể cả FE gọi sót. Inspector nuốt mọi
-                        // lỗi -> ReadFailed nên gọi thẳng, không try/catch. Verdict != Valid -> BỎ QUA (không ký):
+                        // Không bao giờ ký file không đạt gate định dạng, kể cả FE gọi sót. Inspector nuốt mọi
+                        // lỗi -> ReadFailed nên gọi thẳng, không try/catch. Không qua gate -> BỎ QUA (không ký):
                         // đây KHÔNG phải lỗi ký, FE phân biệt qua cờ Skipped.
                         var inspect = _pdfFormatInspector.Inspect(item.FullPath);
-                        if (inspect.Verdict != PdfFormatVerdict.Valid)
+                        var canSign = inspect.Verdict == PdfFormatVerdict.Valid
+                            || inspect.Verdict == PdfFormatVerdict.NotPdfA
+                            || inspect.Verdict == PdfFormatVerdict.NotTwoLayer;
+                        if (!canSign)
                         {
                             // Thông điệp khớp đúng verdict, giống hệt luồng kiểm định dạng (kiem-tra-dinh-dang).
                             var skipMessage = inspect.Verdict switch
                             {
                                 PdfFormatVerdict.NotPdf => "Chưa thể ký số với file khác định dạng PDF.",
-                                PdfFormatVerdict.NotPdfA => "File không phải PDF/A, chưa thể ký số.",
-                                PdfFormatVerdict.NotTwoLayer => "PDF/A không đủ 2 lớp (ảnh scan + text OCR), chưa thể ký số.",
                                 _ => "Không đọc được file, không thể ký số."
                             };
                             fileResult.Success = false;
@@ -531,7 +560,12 @@ namespace Sip.be.Application.Document.Implements
                                     Reason = signOptions.Reason,
                                     Location = signOptions.Location,
                                     Placements = own,
-                                    AllowOverlapContent = signOptions.AllowOverlapContent
+                                    AllowOverlapContent = signOptions.AllowOverlapContent,
+                                    FontFamily = signOptions.FontFamily,
+                                    FontSize = signOptions.FontSize,
+                                    TextColor = signOptions.TextColor,
+                                    SealImage = signOptions.SealImage,
+                                    WetSignatureImage = signOptions.WetSignatureImage
                                 }
                                 : signOptions;
 
@@ -721,15 +755,11 @@ namespace Sip.be.Application.Document.Implements
                         Width = placement.WidthRatio * pageBox.Width,
                         Height = placement.HeightRatio * pageBox.Height
                     };
-                    var actual = _placementResolver.Resolve(pageBox, placement);
+                    var actual = _placementResolver.Resolve(pageBox, placement, requested.Width, requested.Height);
 
                     // Ngưỡng 0.5pt: dưới mức này là sai số làm tròn của số thực, không phải chỉnh vị trí.
-                    if (Math.Abs(actual.Width - requested.Width) > 0.5 || Math.Abs(actual.Height - requested.Height) > 0.5)
-                    {
-                        fileResult.Issues.Add($"Khối {i + 1} nhỏ hơn mức đọc được trên khổ trang này, sẽ được " +
-                            "phóng to cho vừa.");
-                    }
-                    else if (Math.Abs(actual.X - requested.X) > 0.5 || Math.Abs(actual.Y - requested.Y) > 0.5)
+                    if (Math.Abs(actual.X - requested.X) > 0.5 || Math.Abs(actual.Y - requested.Y) > 0.5
+                        || Math.Abs(actual.Width - requested.Width) > 0.5 || Math.Abs(actual.Height - requested.Height) > 0.5)
                     {
                         fileResult.Issues.Add($"Khối {i + 1} tràn ra ngoài trang {pageIndex + 1}, sẽ được dịch " +
                             "vào trong cho khỏi mất chữ ký.");
@@ -775,7 +805,8 @@ namespace Sip.be.Application.Document.Implements
                     XRatio = Math.Clamp(position.XRatio, 0, 1 - width),
                     YRatio = Math.Clamp(position.YRatio, 0, 1 - height),
                     WidthRatio = width,
-                    HeightRatio = height
+                    HeightRatio = height,
+                    Kind = Enum.IsDefined(position.Kind) ? position.Kind : PdfSignPlacementKind.Signature
                 });
             }
             return result;

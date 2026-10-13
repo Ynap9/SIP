@@ -19,7 +19,7 @@ Unicode true
 !include "FileFunc.nsh"
 
 !define APP_NAME      "SIPPACK"
-!define APP_VERSION   "2.2.0"
+!define APP_VERSION   "2.3.0"
 !define APP_PUBLISHER "SaoMaiSolutions"
 !define APP_EXE       "SIPPACK.exe"
 
@@ -33,6 +33,7 @@ Unicode true
 !define WEBVIEW2_EXE "MicrosoftEdgeWebView2Setup.exe"
 !define BIT4ID_EXE   "bit4id_xpki_1.4.10.764-ng-user-vgca-pkimgr-bwc.exe"
 !define VGCA_MSI     "gca01-client-v2-x64-8.3.msi"
+!define TOKEN_MANAGER_EXE "VGCAv1_Installer_1.0.21.0402.exe"
 
 ; Khoá nhận diện lấy trực tiếp từ chính bộ cài / máy đã cài, không đoán theo tên hiển thị:
 ;   VGCA  : ProductCode đọc từ bảng Property của file .msi
@@ -55,7 +56,7 @@ RequestExecutionLevel admin
 SetCompressor /SOLID lzma
 BrandingText "${APP_PUBLISHER} - ${APP_NAME} ${APP_VERSION}"
 
-VIProductVersion "2.2.0.0"
+VIProductVersion "2.3.0.0"
 VIAddVersionKey "ProductName"     "${APP_NAME}"
 VIAddVersionKey "ProductVersion"  "${APP_VERSION}"
 VIAddVersionKey "FileVersion"     "${APP_VERSION}.0"
@@ -68,15 +69,17 @@ Var DepFailed       ; danh sách phụ thuộc cài KHÔNG thành công, gộp l
 Var DriverInstalled ; có cài trình điều khiển token trong phiên này không -> cần khởi động lại
 
 !define MUI_ABORTWARNING
+!define MUI_ICON   "..\Sip.Desktop\Assets\sippack.ico"
+!define MUI_UNICON "..\Sip.Desktop\Assets\sippack.ico"
 !define MUI_FINISHPAGE_RUN "$INSTDIR\${APP_EXE}"
-!define MUI_FINISHPAGE_RUN_TEXT "Chạy ${APP_NAME} ngay"
+!define MUI_FINISHPAGE_RUN_TEXT "Run ${APP_NAME} now"
 
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
-!insertmacro MUI_LANGUAGE "Vietnamese"
+!insertmacro MUI_LANGUAGE "English"
 
 ; ---------------------------------------------------------------------------
 ; Nhận diện phụ thuộc. Dùng CHUNG cho lúc quyết định có cài hay không VÀ lúc
@@ -121,6 +124,29 @@ Function DetectVgca
   ${EndIf}
   ${If} $R0 != ""
     StrCpy $Detected "1"
+  ${EndIf}
+FunctionEnd
+
+Function DetectTokenManager
+  StrCpy $Detected "0"
+  SetRegView 64
+  StrCpy $R1 0
+  ${Do}
+    EnumRegKey $R0 HKLM "SOFTWARE\Microsoft\Cryptography\Defaults\Provider" $R1
+    ${If} $R0 == ""
+      ${Break}
+    ${EndIf}
+    StrCpy $R2 $R0 6
+    ${If} $R2 == "eToken"
+      StrCpy $Detected "1"
+      ${Break}
+    ${EndIf}
+    IntOp $R1 $R1 + 1
+  ${Loop}
+  ${If} $Detected != "1"
+    ${If} ${FileExists} "$WINDIR\System32\eTOKCSP.dll"
+      StrCpy $Detected "1"
+    ${EndIf}
   ${EndIf}
 FunctionEnd
 
@@ -239,6 +265,26 @@ Section "-Phụ thuộc cho USB token và ký số"
         StrCpy $DriverInstalled "1"
       ${Else}
         StrCpy $DepFailed "$DepFailed$\n   - VGCA GCA01-Client v2 (mã $0, log: install-logs\gca01-client.log)"
+      ${EndIf}
+    ${Else}
+      DetailPrint "  không có bộ cài kèm theo - bỏ qua."
+    ${EndIf}
+  ${EndIf}
+
+  DetailPrint "Kiểm tra trình điều khiển token đời cũ (VGCA TokenManager)..."
+  Call DetectTokenManager
+  ${If} $Detected == "1"
+    DetailPrint "  đã có sẵn - bỏ qua."
+  ${Else}
+    ${If} ${FileExists} "$INSTDIR\${DRIVERS_DIR}\${TOKEN_MANAGER_EXE}"
+      DetailPrint "  chưa có - đang cài..."
+      ExecWait '"$INSTDIR\${DRIVERS_DIR}\${TOKEN_MANAGER_EXE}" /S' $0
+      DetailPrint "  bộ cài trả về mã $0"
+      Call DetectTokenManager
+      ${If} $Detected == "1"
+        StrCpy $DriverInstalled "1"
+      ${Else}
+        StrCpy $DepFailed "$DepFailed$\n   - VGCA TokenManager (mã $0)"
       ${EndIf}
     ${Else}
       DetailPrint "  không có bộ cài kèm theo - bỏ qua."

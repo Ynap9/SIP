@@ -29,7 +29,7 @@ export const CERT_SIGNABLE_LABEL = 'Ký được';
 export const CERT_NOT_SIGNABLE_LABEL = 'Không ký được';
 
 // Verdict kiểm ĐỊNH DẠNG file trước khi ký (khớp enum PdfFormatVerdict BE - serialize dạng số).
-// Chỉ Valid mới ký được; mọi verdict khác đều chặn (fail-closed).
+// Verdict luôn là định dạng THẬT của file.
 export enum EPdfFormatVerdict {
   Valid = 0,
   NotPdf = 1,
@@ -47,7 +47,7 @@ export const PDF_FORMAT_VERDICT_LABELS: Record<EPdfFormatVerdict, string> = {
   [EPdfFormatVerdict.ReadFailed]: 'Không đọc được'
 };
 
-// Màu tag PrimeNG theo verdict: chỉ Valid xanh, còn lại đỏ (đều là lý do chặn ký).
+// Màu tag PrimeNG khi file KHÔNG ký được; bảng đọc màu qua SignStep.verdictSeverity(verdict, canSign).
 export const PDF_FORMAT_VERDICT_SEVERITIES: Record<EPdfFormatVerdict, 'success' | 'danger'> = {
   [EPdfFormatVerdict.Valid]: 'success',
   [EPdfFormatVerdict.NotPdf]: 'danger',
@@ -61,20 +61,19 @@ export type SignRowStatus = 'idle' | 'processing' | 'signed' | 'skipped' | 'fail
 
 // ===== Bước 2: cấu hình chữ ký =====
 
-// Khổ khối chữ ký chuẩn (point) trích từ file production - BE dùng đúng bộ số này khi tự đặt vị trí.
-// FE dùng để suy ra tỉ lệ mặc định của ô kéo thả theo khổ trang đang xem.
-export const SIGN_BLOCK_WIDTH_PT = 170;
-export const SIGN_BLOCK_HEIGHT_PT = 30;
-
-// Giới hạn kéo góc phóng to/thu nhỏ khối chữ ký. 1 = đúng khổ gốc 170x30pt của trang đang xem; không kéo
-// góc thì giữ nguyên 1. Kéo góc chỉ đổi MỘT hệ số (không kéo méo) vì BE suy cỡ chữ từ CHIỀU CAO khối
-// (fontSize = 10 * height/30): khối méo là chữ tràn ra ngoài hoặc lọt thỏm giữa khung.
 export const SIGN_BLOCK_MIN_SCALE = 0.5;
 export const SIGN_BLOCK_MAX_SCALE = 4;
 
-// Cỡ chữ trong khối = chiều cao khối / 3 (10pt chữ trên khổ chuẩn 30pt). Dùng để vẽ khối xem trước có tỉ lệ
-// chữ đúng như file ký ra, ở mọi mức phóng.
-export const SIGN_BLOCK_FONT_RATIO = 1 / 3;
+export const SIGN_FONT_FAMILIES = ['Times New Roman', 'Arial', 'Verdana', 'Georgia', 'Courier New'];
+export const SIGN_FONT_FAMILY_DEFAULT = 'Times New Roman';
+export const SIGN_FONT_SIZE_DEFAULT = 10;
+export const SIGN_FONT_SIZE_MIN = 6;
+export const SIGN_FONT_SIZE_MAX = 24;
+export const SIGN_FONT_SIZE_STEP = 0.5;
+export const SIGN_TEXT_COLOR_DEFAULT = '#000000';
+export const SIGN_LINE_HEIGHT_RATIO = 1.15;
+export const SIGN_REFERENCE_PAGE_WIDTH_PT = 595;
+export const SIGN_REFERENCE_PAGE_HEIGHT_PT = 842;
 
 // Cấu hình mặc định = nút "Tự cấu hình": hệ thống tự đặt chữ ký góc trên-phải trang 1 (vẫn co giãn theo khổ
 // trang), không đè nội dung, không file nào có cấu hình riêng.
@@ -84,6 +83,22 @@ export const SIGN_DEFAULT_CONFIG = {
   positions: null,
   fileOverrides: null
 } as const;
+
+export enum ESignTemplatePositionKind {
+  ChuKy = 0,
+  DauDo = 1,
+  ChuKyTuoi = 2
+}
+
+export const SIGN_TEMPLATE_POSITION_KIND_LABELS: Record<ESignTemplatePositionKind, string> = {
+  [ESignTemplatePositionKind.ChuKy]: 'Chữ ký số',
+  [ESignTemplatePositionKind.DauDo]: 'Dấu đỏ',
+  [ESignTemplatePositionKind.ChuKyTuoi]: 'Chữ ký tươi'
+};
+
+export const SIGN_IMAGE_BLOCK_WIDTH_PT = 100;
+
+export const SIGN_TEMPLATE_NEW_ID = 'moi';
 
 // Nhãn cột "Trạng thái ký số" theo trạng thái từng dòng file.
 export const SIGN_STATUS_LABELS: Record<SignRowStatus, string> = {

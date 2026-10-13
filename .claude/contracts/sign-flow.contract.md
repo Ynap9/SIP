@@ -1,5 +1,10 @@
 # Contract — sign flow (`ky-thu-muc` SSE)
 
+> **2026-10-13:** `allowNonTwoLayerPdf` was **removed** from `SignRequestDto`. PDF/A is a warning, not a block:
+> `NotPdfA` / `NotTwoLayer` files are always signed; only `NotPdf` / `ReadFailed` are skipped. `SignRequestDto` also
+> gained `fontFamily` / `fontSize` / `textColor` (see [sign-placement.contract.md](sign-placement.contract.md)).
+> See [pdfa-precheck.contract.md](pdfa-precheck.contract.md).
+
 > **Superseded in part, 2026-07-28:** `SignRequestDto` is no longer "unchanged" — it gained `useCustomPosition`,
 > `positions`, `fileOverrides`, `allowOverlapContent`. See [sign-placement.contract.md](sign-placement.contract.md).
 > Everything below about the SSE stream, the three per-file states and the summary still holds.
@@ -25,14 +30,15 @@ Each SSE `data:` line is one `SignProgressDto`. `targetType` = `manifest` (seed 
 processed) · `summary` (batch total). `SignFileResultDto` arrives as the `file` field of a `targetType = file` event.
 
 ## Three per-file states (BE gates format before signing)
-Before signing each file the BE runs the PDF/A two-layer inspector (defense-in-depth: a non-conforming file is
-**never** signed, even if the FE forgot to pre-check). Each file ends in exactly one of three states — **do not merge
-skipped into failed**:
+Before signing each file the BE runs the PDF/A two-layer inspector (defense-in-depth: a file that fails the gate is
+**never** signed, even if the FE forgot to pre-check). The gate uses the exact same rule as the pre-check (only
+`NotPdf` / `ReadFailed` are skipped). Each file ends in exactly one of three states — **do not merge skipped into
+failed**:
 
 | State | `success` | `skipped` | Meaning |
 |---|---|---|---|
 | **Đã ký** (signed) | `true` | `false` | Signed OK. `outputPath` = the new `<name>_daky_<yyyyMMdd_HHmmss><ext>` file written **next to the source file**; `signedTime`, `trustedTime` populated. |
-| **Bỏ qua** (skipped) | `false` | `true` | Not signed — failed the PDF/A two-layer gate. `reason` = why. Not an error. |
+| **Bỏ qua** (skipped) | `false` | `true` | Not signed — failed the format gate. `reason` = why. Not an error. |
 | **Lỗi** (failed) | `false` | `false` | Signing was attempted and errored (locked file, token pulled…). `reason` = error. |
 
 ## `SignProgressDto.file` shape (camelCase, as received)
@@ -52,7 +58,7 @@ skipped into failed**:
 
 | Field | Type | Meaning |
 |---|---|---|
-| `skipped` | `boolean` | `true` = file bỏ qua vì không đạt PDF/A hai lớp (not signed, not an error). Branch on this to tell skipped from a real signing failure. |
+| `skipped` | `boolean` | `true` = file bỏ qua vì không qua gate định dạng (not signed, not an error). Branch on this to tell skipped from a real signing failure. |
 | `signedTime` | `string \| null` | **Giờ ký (Time ký)** — signingTime the signer wrote into the CMS. `null` unless signed. |
 | `trustedTime` | `string \| null` | **Dấu thời gian** — the TSA `genTime` (raw UTC). `null` unless signed. |
 
@@ -89,4 +95,5 @@ a system error — the stream completes normally and no exception is thrown.
 `fileName`, `success`, `reason`, `verdict`, `verifyReason`, `trustedTime`, `totalFiles`, `successCount`,
 `failedCount` keep their names, types and semantics. `outputPath` and `outputFolder` keep their **names and
 types**; only their meaning is refined per the 2026-07-21 output-location update above (signed file written next to
-the source; `outputFolder` = the source folder). `SignRequestDto` is unchanged (no output field).
+the source; `outputFolder` = the source folder). `SignRequestDto` still has no output field; every change to it so
+far — placement fields, appearance fields — has been additive, except `allowNonTwoLayerPdf`, removed 2026-10-13.

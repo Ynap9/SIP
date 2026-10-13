@@ -1,3 +1,17 @@
+/* Host là cột: bảng ở trên, phân trang ở dưới. Khi cha có chiều cao xác định (class .table-frame) thì
+   bảng nhận hết chỗ còn lại và cuộn bên trong, phần phân trang bám đáy khung chứ không cuộn theo.
+   Xếp cột như vậy không đổi giao diện các bảng cũ vì trước đó hai khối này cũng đã xếp chồng dọc. */
+:host {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+:host > p-table {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
 ::ng-deep .p-datatable .p-datatable-tbody > tr > td {
     white-space: normal !important;
     word-break: break-word;
